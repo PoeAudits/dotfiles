@@ -132,6 +132,10 @@ install_chezmoi() {
                 log_error "Failed to install chezmoi via official installer"
                 return 1
             }
+            # Add ~/bin to PATH if chezmoi was installed there
+            if [[ -x "$HOME/bin/chezmoi" ]]; then
+                export PATH="$HOME/bin:$PATH"
+            fi
             ;;
         *)
             log_info "Using official chezmoi installer for $os"
@@ -139,6 +143,10 @@ install_chezmoi() {
                 log_error "Failed to install chezmoi via official installer"
                 return 1
             }
+            # Add ~/bin to PATH if chezmoi was installed there
+            if [[ -x "$HOME/bin/chezmoi" ]]; then
+                export PATH="$HOME/bin:$PATH"
+            fi
             ;;
     esac
     

@@ -1,5 +1,5 @@
 {{- $mode := "desktop" -}}
-{{- if . | hasKey "mode" -}}
+{{- if hasKey . "mode" -}}
 {{-   $mode = .mode -}}
 {{- end -}}
 {{ if eq $mode "server" }}
