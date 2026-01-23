@@ -1,0 +1,78 @@
+#!/bin/bash
+# Chezmoi run_once script: Clone configuration repositories
+# This script runs once per machine to set up additional git repos
+
+set -euo pipefail
+
+# ==============================================================================
+# Logging Functions
+# ==============================================================================
+
+log_info() { echo "[Clone Repos] $*"; }
+log_warn() { echo "[Clone Repos] WARNING: $*" >&2; }
+log_error() { echo "[Clone Repos] ERROR: $*" >&2; }
+
+# ==============================================================================
+# Repository Configuration
+# ==============================================================================
+
+# Using HTTPS for public repos (no SSH key required)
+OPENCODE_REPO="https://github.com/PoeAudits/.opencode.git"
+OPENCODE_DIR="$HOME/.config/opencode"
+
+AGENTS_REPO="https://github.com/PoeAudits/.agents.git"
+AGENTS_DIR="$HOME/.agents"
+
+# ==============================================================================
+# Clone Function
+# ==============================================================================
+
+clone_repo() {
+    local repo_url="$1"
+    local target_dir="$2"
+    local repo_name="$3"
+
+    if [[ -d "$target_dir/.git" ]]; then
+        log_info "$repo_name already cloned at $target_dir"
+        return 0
+    fi
+
+    if [[ -d "$target_dir" ]]; then
+        # Directory exists but is not a git repo
+        log_warn "$target_dir exists but is not a git repo"
+        log_warn "Backing up to ${target_dir}.backup and cloning fresh"
+        mv "$target_dir" "${target_dir}.backup.$(date +%Y%m%d%H%M%S)"
+    fi
+
+    log_info "Cloning $repo_name to $target_dir..."
+    if git clone "$repo_url" "$target_dir"; then
+        log_info "$repo_name cloned successfully"
+    else
+        log_error "Failed to clone $repo_name"
+        return 1
+    fi
+}
+
+# ==============================================================================
+# Main
+# ==============================================================================
+
+log_info "Setting up configuration repositories..."
+
+# Clone OpenCode configuration
+clone_repo "$OPENCODE_REPO" "$OPENCODE_DIR" "OpenCode config"
+
+# Clone Agents (skills and scripts)
+clone_repo "$AGENTS_REPO" "$AGENTS_DIR" "Agents"
+
+# Run sync-skills if it exists
+if [[ -x "$AGENTS_DIR/bin/sync-skills" ]]; then
+    log_info "Running sync-skills to set up OpenCode skill symlinks..."
+    "$AGENTS_DIR/bin/sync-skills" || log_warn "sync-skills had issues (non-fatal)"
+fi
+
+log_info "Repository setup complete!"
+log_info ""
+log_info "Repositories cloned:"
+log_info "  - OpenCode: $OPENCODE_DIR"
+log_info "  - Agents:   $AGENTS_DIR"

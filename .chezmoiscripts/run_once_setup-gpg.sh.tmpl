@@ -1,0 +1,133 @@
+#!/bin/bash
+# Chezmoi run_once script: Setup GPG key for this machine
+# This script runs once per machine (tracked by chezmoi)
+#
+# Per-machine GPG key strategy: Each machine has its own key with the hostname
+# in the identifier (e.g., "Name (hostname) <email>"). This enables individual
+# key revocation if a machine is compromised.
+
+set -Eeuo pipefail
+
+# Configuration from chezmoi template
+HOSTNAME="{{ .chezmoi.hostname }}"
+GIT_NAME="{{ .git.name }}"
+GIT_EMAIL="{{ .git.email }}"
+KEY_DIR="$HOME/.gnupg/public-keys"
+
+# Logging functions
+log_info() {
+    echo "[GPG Setup] $*"
+}
+
+log_warn() {
+    echo "[GPG Setup] WARNING: $*" >&2
+}
+
+log_error() {
+    echo "[GPG Setup] ERROR: $*" >&2
+}
+
+# Check if GPG is installed
+check_gpg_installed() {
+    if ! command -v gpg &>/dev/null; then
+        log_error "GPG is not installed. Please install it first:"
+        echo "  Arch: sudo pacman -S gnupg"
+        echo "  Ubuntu: sudo apt install gnupg"
+        exit 1
+    fi
+}
+
+# Find GPG key ID for this hostname
+# Returns the key ID if found, empty string otherwise
+find_key_for_hostname() {
+    local key_id
+    # Search for keys with hostname in the uid (case-insensitive)
+    # Format: pub:u:256:22:KEYID:...
+    key_id=$(gpg --list-keys --with-colons 2>/dev/null | \
+        awk -F: -v hostname="$HOSTNAME" '
+            /^pub:/ { current_key = $5 }
+            /^uid:/ && tolower($10) ~ tolower(hostname) { print current_key; exit }
+        ')
+    echo "$key_id"
+}
+
+# Display information about an existing key
+show_key_info() {
+    local key_id="$1"
+    log_info "Found existing GPG key for this machine:"
+    echo ""
+    gpg --list-keys --keyid-format LONG "$key_id" 2>/dev/null
+    echo ""
+}
+
+# Export public key to file
+export_public_key() {
+    local key_id="$1"
+    local export_file="$KEY_DIR/${HOSTNAME}.asc"
+
+    # Create directory if it doesn't exist
+    if [[ ! -d "$KEY_DIR" ]]; then
+        mkdir -p "$KEY_DIR"
+        chmod 700 "$KEY_DIR"
+        log_info "Created public key directory: $KEY_DIR"
+    fi
+
+    # Export the public key
+    if gpg --armor --export "$key_id" > "$export_file" 2>/dev/null; then
+        chmod 644 "$export_file"
+        log_info "Exported public key to: $export_file"
+        echo ""
+        echo "You can share this public key file with others or upload it to a keyserver."
+    else
+        log_warn "Failed to export public key"
+    fi
+}
+
+# Show instructions for generating a new key
+show_generation_instructions() {
+    log_info "No GPG key found for hostname: $HOSTNAME"
+    echo ""
+    echo "To generate a GPG key for this machine, run:"
+    echo ""
+    echo "  gpg --quick-gen-key \"$GIT_NAME ($HOSTNAME) <$GIT_EMAIL>\" ed25519 sign 0"
+    echo ""
+    echo "This will:"
+    echo "  - Create an ed25519 signing key (modern, secure, fast)"
+    echo "  - Include the hostname in the key identifier for easy identification"
+    echo "  - Set no expiration (use '1y' instead of '0' for 1-year expiry)"
+    echo ""
+    echo "After generating the key, run 'chezmoi apply' again to export the public key."
+    echo ""
+    echo "Alternative: For a key with encryption capability, use:"
+    echo ""
+    echo "  gpg --full-gen-key"
+    echo ""
+    echo "And enter: $GIT_NAME ($HOSTNAME) <$GIT_EMAIL>"
+    echo ""
+}
+
+# Main script
+main() {
+    log_info "Checking GPG key setup for: $HOSTNAME"
+
+    # Ensure GPG is available
+    check_gpg_installed
+
+    # Look for existing key
+    local key_id
+    key_id=$(find_key_for_hostname)
+
+    if [[ -n "$key_id" ]]; then
+        # Key exists - show info and export
+        show_key_info "$key_id"
+        export_public_key "$key_id"
+        log_info "GPG key setup complete for $HOSTNAME"
+    else
+        # No key - show instructions
+        show_generation_instructions
+        # Exit successfully - this is informational, not an error
+        exit 0
+    fi
+}
+
+main "$@"

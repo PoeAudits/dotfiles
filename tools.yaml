@@ -1,0 +1,196 @@
+# Tool Installation Configuration
+# ================================
+# This file defines tools to be installed by chezmoi.
+# Adding a new tool only requires adding an entry here.
+#
+# Format:
+#   tool_name:
+#     check: "command to verify installation"
+#     install:
+#       arch: "install command for Arch Linux"
+#       ubuntu: "install command for Ubuntu/Debian"
+#       all: "install command for all distros (used if arch/ubuntu not specified)"
+#
+# The install script will:
+#   1. Run the check command
+#   2. If it fails (tool not installed), run the appropriate install command
+#   3. Skip if already installed (idempotent)
+
+tools:
+  # ===========================================================================
+  # Core Development Tools (from spec)
+  # ===========================================================================
+
+  # Go - Programming language (1.22+)
+  go:
+    check: "go version"
+    install:
+      arch: "sudo pacman -S --noconfirm go"
+      ubuntu: |
+        GO_VERSION="1.22.0"
+        wget -q "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+        sudo rm -rf /usr/local/go
+        sudo tar -C /usr/local -xzf "go${GO_VERSION}.linux-amd64.tar.gz"
+        rm "go${GO_VERSION}.linux-amd64.tar.gz"
+        echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.profile
+
+  # Bun - JavaScript runtime and package manager
+  bun:
+    check: "bun --version"
+    install:
+      all: "curl -fsSL https://bun.sh/install | bash"
+
+  # uv - Fast Python package manager
+  uv:
+    check: "uv --version"
+    install:
+      all: "curl -LsSf https://astral.sh/uv/install.sh | sh"
+
+  # Foundry - Ethereum development toolkit (forge, cast, anvil)
+  foundry:
+    check: "forge --version"
+    install:
+      all: |
+        curl -L https://foundry.paradigm.xyz | bash
+        export PATH="$HOME/.foundry/bin:$PATH"
+        foundryup
+
+  # Tailscale - VPN mesh network
+  tailscale:
+    check: "tailscale --version"
+    install:
+      all: "curl -fsSL https://tailscale.com/install.sh | sh"
+
+  # tmux - Terminal multiplexer
+  tmux:
+    check: "tmux -V"
+    install:
+      arch: "sudo pacman -S --noconfirm tmux"
+      ubuntu: "sudo apt install -y tmux"
+
+  # Neovim - Modern vim
+  neovim:
+    check: "nvim --version"
+    install:
+      arch: "sudo pacman -S --noconfirm neovim"
+      ubuntu: |
+        sudo apt install -y software-properties-common
+        sudo add-apt-repository -y ppa:neovim-ppa/unstable
+        sudo apt update
+        sudo apt install -y neovim
+
+  # Starship - Cross-shell prompt
+  starship:
+    check: "starship --version"
+    install:
+      all: "curl -sS https://starship.rs/install.sh | sh -s -- -y"
+
+  # pass - Password manager (GPG-based)
+  pass:
+    check: "pass --version"
+    install:
+      arch: "sudo pacman -S --noconfirm pass"
+      ubuntu: "sudo apt install -y pass"
+
+  # GPG - GNU Privacy Guard (usually pre-installed)
+  gpg:
+    check: "gpg --version"
+    install:
+      arch: "sudo pacman -S --noconfirm gnupg"
+      ubuntu: "sudo apt install -y gnupg"
+
+  # TPM - Tmux Plugin Manager
+  tpm:
+    check: "test -d ~/.tmux/plugins/tpm"
+    install:
+      all: "git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm"
+
+  # Overlord - Project management CLI (requires Go)
+  overlord:
+    check: "overlord --version"
+    install:
+      all: |
+        export PATH="$PATH:$HOME/go/bin:/usr/local/go/bin"
+        go install github.com/PoeAudits/overlord/cmd/overlord@latest
+
+  # ===========================================================================
+  # CLI Utilities (nice to have)
+  # ===========================================================================
+
+  # jq - JSON processor
+  jq:
+    check: "jq --version"
+    install:
+      arch: "sudo pacman -S --noconfirm jq"
+      ubuntu: "sudo apt install -y jq"
+
+  # ripgrep - Fast grep alternative
+  ripgrep:
+    check: "rg --version"
+    install:
+      arch: "sudo pacman -S --noconfirm ripgrep"
+      ubuntu: "sudo apt install -y ripgrep"
+
+  # fd - Fast find alternative
+  fd:
+    check: "fd --version"
+    install:
+      arch: "sudo pacman -S --noconfirm fd"
+      ubuntu: "sudo apt install -y fd-find"
+
+  # fzf - Fuzzy finder
+  fzf:
+    check: "fzf --version"
+    install:
+      arch: "sudo pacman -S --noconfirm fzf"
+      ubuntu: "sudo apt install -y fzf"
+
+  # bat - Cat with syntax highlighting
+  bat:
+    check: "bat --version"
+    install:
+      arch: "sudo pacman -S --noconfirm bat"
+      ubuntu: "sudo apt install -y bat"
+
+  # eza - Modern ls replacement
+  eza:
+    check: "eza --version"
+    install:
+      arch: "sudo pacman -S --noconfirm eza"
+      ubuntu: |
+        sudo apt install -y gpg
+        sudo mkdir -p /etc/apt/keyrings
+        wget -qO- https://raw.githubusercontent.com/eza-community/eza/main/deb.asc | sudo gpg --dearmor -o /etc/apt/keyrings/gierens.gpg
+        echo "deb [signed-by=/etc/apt/keyrings/gierens.gpg] http://deb.gierens.de stable main" | sudo tee /etc/apt/sources.list.d/gierens.list
+        sudo chmod 644 /etc/apt/keyrings/gierens.gpg /etc/apt/sources.list.d/gierens.list
+        sudo apt update
+        sudo apt install -y eza
+
+  # zoxide - Smarter cd command
+  zoxide:
+    check: "zoxide --version"
+    install:
+      arch: "sudo pacman -S --noconfirm zoxide"
+      ubuntu: "curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh"
+
+  # yq - YAML processor (like jq for YAML)
+  yq:
+    check: "yq --version"
+    install:
+      arch: "sudo pacman -S --noconfirm yq"
+      ubuntu: |
+        YQ_VERSION=$(curl -s "https://api.github.com/repos/mikefarah/yq/releases/latest" | grep -Po '"tag_name": "\K[^"]*')
+        curl -Lo /tmp/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+        chmod +x /tmp/yq
+        sudo mv /tmp/yq /usr/local/bin/yq
+
+  # delta - Better git diff
+  delta:
+    check: "delta --version"
+    install:
+      arch: "sudo pacman -S --noconfirm git-delta"
+      ubuntu: |
+        DELTA_VERSION=$(curl -s "https://api.github.com/repos/dandavison/delta/releases/latest" | grep -Po '"tag_name": "\K[^"]*')
+        curl -Lo /tmp/delta.deb "https://github.com/dandavison/delta/releases/latest/download/git-delta_${DELTA_VERSION}_amd64.deb"
+        sudo dpkg -i /tmp/delta.deb
+        rm /tmp/delta.deb

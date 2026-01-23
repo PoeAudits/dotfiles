@@ -1,0 +1,178 @@
+# ============================================================================
+# Dotfiles Repository .gitignore
+# ============================================================================
+# Security-critical: Prevents accidental commits of secrets and credentials
+# Secrets are managed separately via pass (password-store)
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Environment & Configuration Files
+# ----------------------------------------------------------------------------
+# Environment files often contain API keys, tokens, and other secrets
+.env
+.env.*
+.envrc
+
+# ----------------------------------------------------------------------------
+# Private Keys & Certificates
+# ----------------------------------------------------------------------------
+# SSH keys, GPG keys, and other cryptographic material
+id_*
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# GPG files (except password-store which has its own repo)
+secring.gpg
+*.gpg
+!.password-store/**/*.gpg
+
+# ----------------------------------------------------------------------------
+# Credentials & Secrets
+# ----------------------------------------------------------------------------
+# Various credential file formats
+credentials
+credentials.*
+*.credentials
+secret
+secrets
+secrets.*
+*.secret
+auth.json
+token
+tokens
+*.token
+
+# Cloud provider credentials
+.aws/credentials
+.azure/credentials
+.gcloud/credentials
+
+# ----------------------------------------------------------------------------
+# Editor & IDE Artifacts
+# ----------------------------------------------------------------------------
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (IntelliJ, PyCharm, WebStorm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+.*.sw?
+Session.vim
+
+# Emacs
+\#*\#
+.\#*
+*.elc
+auto-save-list
+tramp
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ----------------------------------------------------------------------------
+# Operating System Files
+# ----------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ----------------------------------------------------------------------------
+# Build Artifacts & Caches
+# ----------------------------------------------------------------------------
+# General build outputs
+dist/
+build/
+out/
+target/
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Dependency directories
+node_modules/
+vendor/
+.bundle/
+
+# Package manager caches
+.npm/
+.yarn/
+.pnpm-store/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Go
+*.test
+*.out
+
+# Rust
+target/
+Cargo.lock
+
+# ----------------------------------------------------------------------------
+# Temporary & Log Files
+# ----------------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+.*.tmp
+
+# ----------------------------------------------------------------------------
+# Chezmoi-Specific
+# ----------------------------------------------------------------------------
+# Chezmoi's own state (managed by chezmoi itself)
+.chezmoi.*.yaml
+
+# ----------------------------------------------------------------------------
+# Git-Specific
+# ----------------------------------------------------------------------------
+# Git merge/rebase artifacts
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
+*_BACKUP_*.txt
+*_BASE_*.txt
+*_LOCAL_*.txt
+*_REMOTE_*.txt

@@ -1,0 +1,71 @@
+# SSH Configuration
+# This is a base SSH config with sensible defaults.
+# Add your actual host configurations below the defaults section.
+# 
+# Note: The 'private_' prefix in chezmoi ensures this file gets 600 permissions.
+
+# ============================================================================
+# Default Settings (applied to all hosts)
+# ============================================================================
+
+Host *
+    # Automatically add keys to ssh-agent
+    AddKeysToAgent yes
+    
+    # Only use keys specified in IdentityFile directives
+    IdentitiesOnly yes
+    
+    # Keep connections alive
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+# ============================================================================
+# Host-Specific Configurations
+# ============================================================================
+# Add your actual hosts below. Here are some common patterns:
+
+# Example: GitHub with specific SSH key
+# Host github.com
+#     HostName github.com
+#     User git
+#     IdentityFile ~/.ssh/id_ed25519
+
+# Example: GitHub with multiple accounts (work)
+# Host github-work
+#     HostName github.com
+#     User git
+#     IdentityFile ~/.ssh/id_ed25519_work
+
+# Example: GitHub with multiple accounts (personal)
+# Host github-personal
+#     HostName github.com
+#     User git
+#     IdentityFile ~/.ssh/id_ed25519_personal
+
+# Example: VPS or remote server
+# Host myserver
+#     HostName 192.168.1.100
+#     User username
+#     Port 22
+#     IdentityFile ~/.ssh/id_ed25519
+
+# Example: Server with custom port and strict host key checking disabled
+# Host dev-server
+#     HostName dev.example.com
+#     User developer
+#     Port 2222
+#     IdentityFile ~/.ssh/id_rsa
+#     StrictHostKeyChecking no
+#     UserKnownHostsFile /dev/null
+
+# Example: Jump host / bastion server
+# Host bastion
+#     HostName bastion.example.com
+#     User admin
+#     IdentityFile ~/.ssh/id_ed25519
+#
+# Host internal-server
+#     HostName 10.0.1.50
+#     User admin
+#     ProxyJump bastion
+#     IdentityFile ~/.ssh/id_ed25519

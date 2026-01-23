@@ -1,0 +1,18 @@
+{{- $mode := "desktop" -}}
+{{- if . | hasKey "mode" -}}
+{{-   $mode = .mode -}}
+{{- end -}}
+{{ if eq $mode "server" }}
+# Desktop-only configurations (ignored on server)
+dot_config/hyper-whisper/
+{{ end }}
+
+# Neovim files managed externally or generated
+# theme.lua is a symlink managed by Omarchy on desktop systems
+.config/nvim/lua/plugins/theme.lua
+.config/nvim/lazy-lock.json
+.config/nvim/lazyvim.json
+.config/nvim/.gitignore
+.config/nvim/.neoconf.json
+.config/nvim/README.md
+.config/nvim/LICENSE

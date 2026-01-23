@@ -1,0 +1,63 @@
+[user]
+	name = {{ .git.name }}
+	email = {{ .git.email }}
+
+[alias]
+	# Basic shortcuts
+	co = checkout
+	br = branch
+	ci = commit
+	st = status
+	
+	# Pretty log with graph
+	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative
+	
+	# Show last commit
+	last = log -1 HEAD
+	
+	# Amend last commit
+	amend = commit --amend
+	
+	# Unstage files
+	unstage = reset HEAD --
+	
+	# Show diff of staged changes
+	staged = diff --cached
+	
+	# List aliases
+	aliases = config --get-regexp alias
+
+[pull]
+	rebase = true
+
+[push]
+	default = simple
+	followTags = true
+
+[init]
+	defaultBranch = master
+
+[core]
+	editor = nvim
+	autocrlf = input
+	pager = delta
+
+[interactive]
+	diffFilter = delta --color-only
+
+[delta]
+	navigate = true
+	line-numbers = true
+	side-by-side = false
+
+[merge]
+	conflictstyle = diff3
+
+[diff]
+	colorMoved = default
+
+[fetch]
+	prune = true
+
+[rebase]
+	autoStash = true

@@ -1,0 +1,174 @@
+# ~/.bashrc - Bash configuration
+# Managed by chezmoi - do not edit directly
+
+# If not running interactively, don't do anything
+[[ $- != *i* ]] && return
+
+# ==============================================================================
+# PATH Configuration
+# ==============================================================================
+
+# Local binaries
+[[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
+[[ -d "$HOME/bin" ]] && export PATH="$HOME/bin:$PATH"
+
+# Go
+if [[ -d "$HOME/go" ]]; then
+    export GOPATH="$HOME/go"
+    export PATH="$GOPATH/bin:$PATH"
+fi
+
+# Bun
+[[ -d "$HOME/.bun/bin" ]] && export PATH="$HOME/.bun/bin:$PATH"
+[[ -d "$HOME/.cache/.bun/bin" ]] && export PATH="$HOME/.cache/.bun/bin:$PATH"
+
+# Foundry (Ethereum development)
+[[ -d "$HOME/.foundry/bin" ]] && export PATH="$HOME/.foundry/bin:$PATH"
+[[ -d "$HOME/.config/.foundry/bin" ]] && export PATH="$HOME/.config/.foundry/bin:$PATH"
+
+# pnpm
+if [[ -d "$HOME/.local/share/pnpm" ]]; then
+    export PNPM_HOME="$HOME/.local/share/pnpm"
+    case ":$PATH:" in
+        *":$PNPM_HOME:"*) ;;
+        *) export PATH="$PNPM_HOME:$PATH" ;;
+    esac
+fi
+
+# Corepack shims
+[[ -d "$HOME/.cache/corepack/shims" ]] && export PATH="$HOME/.cache/corepack/shims:$PATH"
+
+# Opencode
+[[ -d "$HOME/.opencode/bin" ]] && export PATH="$HOME/.opencode/bin:$PATH"
+
+# Agents (skills and scripts)
+[[ -d "$HOME/.agents/bin" ]] && export PATH="$HOME/.agents/bin:$PATH"
+
+# ==============================================================================
+# Environment Variables
+# ==============================================================================
+
+export EDITOR="${EDITOR:-nvim}"
+export VISUAL="${VISUAL:-nvim}"
+export PAGER="${PAGER:-less}"
+export LANG="${LANG:-en_US.UTF-8}"
+
+# Enable eza for opencode if available
+command -v eza &>/dev/null && export OPENCODE_ENABLE_EXA=true
+
+# ==============================================================================
+# Password Store (pass) Configuration
+# ==============================================================================
+
+# Set password store directory if it exists
+if [[ -d "$HOME/.password-store" ]]; then
+    export PASSWORD_STORE_DIR="$HOME/.password-store"
+elif [[ -d "$HOME/.local/share/pass" ]]; then
+    export PASSWORD_STORE_DIR="$HOME/.local/share/pass"
+fi
+
+# ==============================================================================
+# Omarchy / Desktop Integration
+# ==============================================================================
+
+{{ if eq .mode "desktop" -}}
+# Desktop mode: Source Omarchy defaults if available
+if [[ -f "$HOME/.local/share/omarchy/default/bash/rc" ]]; then
+    source "$HOME/.local/share/omarchy/default/bash/rc"
+fi
+{{ end -}}
+
+# ==============================================================================
+# Shell Configuration
+# ==============================================================================
+
+# History configuration
+HISTFILE="${HISTFILE:-$HOME/.bash_history}"
+HISTSIZE=50000
+HISTFILESIZE=50000
+HISTCONTROL=ignoreboth:erasedups
+shopt -s histappend
+
+# Check window size after each command
+shopt -s checkwinsize
+
+# Enable extended globbing
+shopt -s extglob
+
+# Enable recursive globbing with **
+shopt -s globstar 2>/dev/null || true
+
+# Autocorrect minor spelling errors in cd
+shopt -s cdspell 2>/dev/null || true
+
+# Enable programmable completion
+if ! shopt -oq posix; then
+    if [[ -f /usr/share/bash-completion/bash_completion ]]; then
+        source /usr/share/bash-completion/bash_completion
+    elif [[ -f /etc/bash_completion ]]; then
+        source /etc/bash_completion
+    fi
+fi
+
+# ==============================================================================
+# Source Shared Configuration
+# ==============================================================================
+
+# Source shared aliases
+[[ -f "$HOME/.config/shell/aliases.sh" ]] && source "$HOME/.config/shell/aliases.sh"
+
+# Source shared functions
+[[ -f "$HOME/.config/shell/functions.sh" ]] && source "$HOME/.config/shell/functions.sh"
+
+# ==============================================================================
+# Load Secrets from Pass
+# ==============================================================================
+
+# Load environment secrets from pass if available
+# Create a pass entry at 'env/shell' with KEY=VALUE pairs to auto-load secrets
+if command -v pass &>/dev/null && [[ -n "${PASSWORD_STORE_DIR:-}" ]]; then
+    # Load shell environment variables
+    if [[ -f "$PASSWORD_STORE_DIR/env/shell.gpg" ]]; then
+        passenv "env/shell"
+    fi
+
+    # Load API keys
+    if [[ -f "$PASSWORD_STORE_DIR/env/api-keys.gpg" ]]; then
+        passenv "env/api-keys"
+    fi
+fi
+
+# ==============================================================================
+# Tool Initialization
+# ==============================================================================
+
+# Initialize zoxide (smart cd) if available
+if command -v zoxide &>/dev/null; then
+    eval "$(zoxide init bash)"
+fi
+
+# Initialize fzf if available
+if command -v fzf &>/dev/null; then
+    # Source fzf keybindings and completion
+    [[ -f /usr/share/fzf/key-bindings.bash ]] && source /usr/share/fzf/key-bindings.bash
+    [[ -f /usr/share/fzf/completion.bash ]] && source /usr/share/fzf/completion.bash
+    # Arch Linux paths
+    [[ -f /usr/share/fzf/fzf-key-bindings.bash ]] && source /usr/share/fzf/fzf-key-bindings.bash
+fi
+
+# Initialize direnv if available
+if command -v direnv &>/dev/null; then
+    eval "$(direnv hook bash)"
+fi
+
+# Initialize starship prompt
+if command -v starship &>/dev/null; then
+    eval "$(starship init bash)"
+fi
+
+# ==============================================================================
+# Local Overrides
+# ==============================================================================
+
+# Source local bashrc if it exists (for machine-specific config)
+[[ -f "$HOME/.bashrc.local" ]] && source "$HOME/.bashrc.local"

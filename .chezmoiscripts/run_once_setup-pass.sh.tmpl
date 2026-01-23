@@ -1,0 +1,249 @@
+#!/bin/bash
+# Chezmoi run_once script: Setup pass (password-store)
+# This script runs once per machine to verify pass is properly configured
+#
+# Pass stores secrets in a git repo, encrypted with GPG. The store can be
+# shared between machines by adding each machine's GPG public key to .gpg-id.
+
+set -Eeuo pipefail
+
+# Configuration from chezmoi template
+HOSTNAME="{{ .chezmoi.hostname }}"
+
+# Configuration
+PASSWORD_STORE_DIR="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
+
+# Logging functions (consistent with other chezmoi scripts)
+log_info() {
+    echo "[Pass Setup] $*"
+}
+
+log_warn() {
+    echo "[Pass Setup] WARNING: $*" >&2
+}
+
+log_error() {
+    echo "[Pass Setup] ERROR: $*" >&2
+}
+
+# Detect package manager for install instructions
+get_install_command() {
+    if command -v pacman &>/dev/null; then
+        echo "sudo pacman -S pass"
+    elif command -v apt &>/dev/null; then
+        echo "sudo apt install pass"
+    elif command -v dnf &>/dev/null; then
+        echo "sudo dnf install pass"
+    elif command -v brew &>/dev/null; then
+        echo "brew install pass"
+    else
+        echo "# Install pass using your package manager"
+    fi
+}
+
+# Check if pass is installed
+check_pass_installed() {
+    if command -v pass &>/dev/null; then
+        log_info "pass is installed: $(command -v pass)"
+        return 0
+    else
+        log_error "pass is not installed"
+        echo ""
+        echo "To install pass, run:"
+        echo "  $(get_install_command)"
+        echo ""
+        return 1
+    fi
+}
+
+# Check if GPG is installed and has keys
+check_gpg_setup() {
+    if ! command -v gpg &>/dev/null; then
+        log_error "gpg is not installed"
+        echo ""
+        echo "GPG is required for pass. Install it first:"
+        echo "  Arch: sudo pacman -S gnupg"
+        echo "  Ubuntu: sudo apt install gnupg"
+        return 1
+    fi
+    
+    # Check for secret keys
+    if ! gpg --list-secret-keys 2>/dev/null | grep -q "sec"; then
+        log_warn "No GPG secret keys found"
+        echo ""
+        echo "You need a GPG key to use pass. Run 'chezmoi apply' to set up GPG first,"
+        echo "or generate a key manually with:"
+        echo "  gpg --full-generate-key"
+        echo ""
+        echo "Or import an existing key:"
+        echo "  gpg --import /path/to/private-key.asc"
+        return 1
+    fi
+    
+    log_info "GPG is configured with secret keys"
+    return 0
+}
+
+# Check if password store exists
+check_store_exists() {
+    if [[ -d "$PASSWORD_STORE_DIR" ]]; then
+        log_info "Password store directory exists: $PASSWORD_STORE_DIR"
+        return 0
+    else
+        log_warn "Password store directory does not exist: $PASSWORD_STORE_DIR"
+        return 1
+    fi
+}
+
+# Test if we can decrypt the store
+test_decryption() {
+    # Try to list passwords (this tests GPG decryption of .gpg-id)
+    if pass ls &>/dev/null; then
+        log_info "GPG decryption works - you have access to the store"
+        return 0
+    else
+        log_error "Cannot decrypt password store"
+        echo ""
+        echo "Your GPG key ($HOSTNAME) is not authorized to decrypt this store."
+        echo ""
+        echo "This happens when:"
+        echo "  1. This is a new machine and your key hasn't been added to the store"
+        echo "  2. The GPG key ID in .gpg-id doesn't match your key"
+        echo ""
+        echo "To fix this (on a machine that CAN decrypt):"
+        echo ""
+        echo "  1. Get this machine's GPG key ID (look for the key with '$HOSTNAME'):"
+        echo "     gpg --list-keys --keyid-format LONG"
+        echo ""
+        echo "  2. Export and transfer your public key to the authorized machine:"
+        echo "     gpg --export --armor YOUR_KEY_ID > ${HOSTNAME}-public.asc"
+        echo ""
+        echo "  3. On the authorized machine, import and add the key:"
+        echo "     gpg --import ${HOSTNAME}-public.asc"
+        echo "     cd $PASSWORD_STORE_DIR"
+        echo "     echo 'YOUR_KEY_ID' >> .gpg-id"
+        echo "     pass init \$(cat .gpg-id | tr '\\n' ' ')"
+        echo "     git add -A && git commit -m 'Add GPG key for $HOSTNAME'"
+        echo "     git push"
+        echo ""
+        echo "  4. On this machine, pull the updated store:"
+        echo "     cd $PASSWORD_STORE_DIR && git pull"
+        return 1
+    fi
+}
+
+# Show instructions for initializing a new store
+show_new_store_instructions() {
+    echo ""
+    echo "To initialize a NEW password store (first machine):"
+    echo "  1. Get your GPG key ID:"
+    echo "     gpg --list-keys --keyid-format LONG"
+    echo ""
+    echo "  2. Initialize pass with your key:"
+    echo "     pass init YOUR_GPG_KEY_ID"
+    echo ""
+    echo "  3. (Optional) Set up git for syncing:"
+    echo "     pass git init"
+    echo "     pass git remote add origin git@github.com:USER/password-store.git"
+    echo "     pass git push -u origin master"
+    echo ""
+    echo "To clone an EXISTING password store (additional machine):"
+    echo "  1. Clone the repository:"
+    echo "     git clone git@github.com:USER/password-store.git $PASSWORD_STORE_DIR"
+    echo ""
+    echo "  2. Your GPG key must be authorized in the store's .gpg-id file"
+    echo "     (See instructions above for adding a new key)"
+}
+
+# Show environment hint
+show_env_hint() {
+    if [[ "$PASSWORD_STORE_DIR" != "$HOME/.password-store" ]]; then
+        log_info "Using custom PASSWORD_STORE_DIR: $PASSWORD_STORE_DIR"
+        echo ""
+        echo "Make sure this is set in your shell profile:"
+        echo "  export PASSWORD_STORE_DIR=\"$PASSWORD_STORE_DIR\""
+    fi
+}
+
+# Show summary of current state
+show_summary() {
+    echo ""
+    echo "Password Store Status:"
+    echo "  Machine:   $HOSTNAME"
+    echo "  Directory: $PASSWORD_STORE_DIR"
+    
+    if [[ -d "$PASSWORD_STORE_DIR" ]]; then
+        echo "  Exists:    Yes"
+        
+        if [[ -f "$PASSWORD_STORE_DIR/.gpg-id" ]]; then
+            echo "  GPG IDs:   $(cat "$PASSWORD_STORE_DIR/.gpg-id" | tr '\n' ' ')"
+        fi
+        
+        if [[ -d "$PASSWORD_STORE_DIR/.git" ]]; then
+            local remote
+            remote=$(git -C "$PASSWORD_STORE_DIR" remote get-url origin 2>/dev/null || echo "none")
+            echo "  Git Remote: $remote"
+        else
+            echo "  Git:       Not initialized"
+        fi
+        
+        # Count passwords
+        local count
+        count=$(find "$PASSWORD_STORE_DIR" -name "*.gpg" 2>/dev/null | wc -l || echo "0")
+        echo "  Passwords: $count entries"
+    else
+        echo "  Exists:    No"
+    fi
+}
+
+# Main execution
+main() {
+    log_info "Checking pass setup for: $HOSTNAME"
+    
+    local has_errors=false
+    
+    # Check pass installation
+    if ! check_pass_installed; then
+        has_errors=true
+    fi
+    
+    # Check GPG setup
+    if ! check_gpg_setup; then
+        has_errors=true
+    fi
+    
+    # If basic requirements not met, exit early
+    if [[ "$has_errors" == "true" ]]; then
+        echo ""
+        log_error "Please install the required tools and run 'chezmoi apply' again"
+        # Exit 0 so chezmoi doesn't fail, but user sees the message
+        exit 0
+    fi
+    
+    # Check if store exists
+    if check_store_exists; then
+        # Store exists, test decryption
+        if ! test_decryption; then
+            show_summary
+            # Exit 0 so chezmoi doesn't fail
+            exit 0
+        fi
+    else
+        # Store doesn't exist, show setup instructions
+        show_new_store_instructions
+        show_summary
+        # Exit 0 so chezmoi doesn't fail
+        exit 0
+    fi
+    
+    # Show environment hint (only if custom dir)
+    show_env_hint
+    
+    # Show summary
+    show_summary
+    
+    echo ""
+    log_info "Pass is properly configured!"
+}
+
+main "$@"

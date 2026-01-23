@@ -1,0 +1,49 @@
+add_newline = true
+command_timeout = 200
+
+# Two-line prompt:
+# Line 1: venv, directory, git branch + status
+# Line 2: prompt character
+format = "$hostname$python$directory$git_branch$git_status $character"
+
+[hostname]
+ssh_only = true
+style = "bold yellow"
+format = "[$hostname]($style) "
+
+[character]
+success_symbol = "[❯](bold cyan)"
+error_symbol   = "[✗](bold cyan)"
+
+[directory]
+truncation_length = 2
+truncation_symbol = "…/"
+repo_root_style   = "bold cyan"
+repo_root_format  = "[$repo_root]($repo_root_style)[$path]($style)[$read_only]($read_only_style) "
+# Ensure a space after the directory component
+format            = "[$path]($style) "
+
+[git_branch]
+style  = "italic cyan"
+format = "[$branch]($style) "
+
+[git_status]
+style      = "cyan"
+format     = "[$all_status]($style)"
+ahead      = "⇡${count} "
+diverged   = "⇕⇡${ahead_count}⇣${behind_count} "
+behind     = "⇣${count} "
+conflicted = " "
+up_to_date = " "
+untracked  = "? "
+modified   = " "
+stashed    = ""
+staged     = ""
+renamed    = ""
+deleted    = ""
+
+[python]
+# Shows virtualenv/conda env automatically when detected.
+# Customize how it appears:
+format = "([$virtualenv]($style) )"
+style  = "bold green"

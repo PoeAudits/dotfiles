@@ -1,0 +1,14 @@
+{{- $mode := promptStringOnce . "mode" "Installation mode (server/desktop)" "desktop" -}}
+{{- $gitName := promptStringOnce . "git.name" "Git user name" -}}
+{{- $gitEmail := promptStringOnce . "git.email" "Git email" -}}
+{{- $overlordBaseDir := promptStringOnce . "overlord.base_dir" "Overlord base directory" "~/Overlord" -}}
+
+[data]
+mode = {{ $mode | quote }}
+
+[data.git]
+name = {{ $gitName | quote }}
+email = {{ $gitEmail | quote }}
+
+[data.overlord]
+base_dir = {{ $overlordBaseDir | quote }}
