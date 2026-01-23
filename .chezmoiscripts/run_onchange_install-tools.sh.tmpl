@@ -6,6 +6,10 @@
 
 set -Eeuo pipefail
 
+# Avoid interactive prompts during package installation
+export DEBIAN_FRONTEND=noninteractive
+export TZ=UTC
+
 # ============================================================================
 # Configuration
 # ============================================================================
@@ -84,6 +88,59 @@ detect_os() {
 }
 
 # ============================================================================
+# System Dependencies
+# ============================================================================
+
+# Ensure required system utilities are installed
+ensure_system_dependencies() {
+    local os="$1"
+    local missing_deps=()
+    
+    # Check for required utilities (commands only, not packages)
+    command -v curl &>/dev/null || missing_deps+=("curl")
+    command -v unzip &>/dev/null || missing_deps+=("unzip")
+    command -v tar &>/dev/null || missing_deps+=("tar")
+    command -v git &>/dev/null || missing_deps+=("git")
+    
+    # Check if we need to install anything
+    local need_install=false
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        log_info "Missing utilities: ${missing_deps[*]}"
+        need_install=true
+    elif [[ "$os" != "arch" ]] && ! dpkg -s ca-certificates &>/dev/null 2>&1; then
+        # Check ca-certificates on Debian-based systems only (use dpkg -s not -l)
+        log_info "Missing package: ca-certificates"
+        need_install=true
+    fi
+    
+    if [[ "$need_install" == "true" ]]; then
+        log_info "Installing system dependencies..."
+        
+        if [[ "$os" == "arch" ]]; then
+            # On Arch, only install what we need (ca-certificates is usually present)
+            sudo pacman -S --noconfirm --needed curl unzip tar git || {
+                log_error "Failed to install system dependencies"
+                return 1
+            }
+        else
+            # Ubuntu/Debian
+            sudo apt update -qq || {
+                log_error "Failed to update package lists"
+                return 1
+            }
+            sudo apt install -y curl unzip tar git ca-certificates || {
+                log_error "Failed to install system dependencies"
+                return 1
+            }
+        fi
+        
+        log_success "System dependencies installed"
+    else
+        log_info "System dependencies already installed"
+    fi
+}
+
+# ============================================================================
 # YAML Parsing (using Python - available on all systems)
 # ============================================================================
 
@@ -140,14 +197,20 @@ ensure_python_yaml() {
     os=$(detect_os)
 
     if [[ "$os" == "arch" ]]; then
-        sudo pacman -S --noconfirm python-yaml
+        sudo pacman -S --noconfirm python-yaml || {
+            log_error "Failed to install python-yaml"
+            return 1
+        }
     else
-        sudo apt install -y python3-yaml
+        sudo apt install -y python3-yaml || {
+            log_error "Failed to install python3-yaml"
+            return 1
+        }
     fi
 
     if ! python3 -c "import yaml" &>/dev/null; then
         log_error "Failed to install Python YAML module"
-        exit 1
+        return 1
     fi
     log_success "Python YAML module installed"
 }
@@ -293,8 +356,17 @@ main() {
     os=$(detect_os)
     log_info "Detected OS: $os"
 
+    # Ensure system dependencies are installed
+    ensure_system_dependencies "$os" || {
+        log_error "Failed to ensure system dependencies"
+        exit 1
+    }
+
     # Ensure Python YAML is available
-    ensure_python_yaml
+    ensure_python_yaml || {
+        log_error "Failed to ensure Python YAML support"
+        exit 1
+    }
 
     # Get list of tools
     local tools

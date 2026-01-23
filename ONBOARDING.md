@@ -380,3 +380,11 @@ gpg --import keyfile.asc
 ---
 
 For more details, see [dotfiles-spec.md](thoughts/plans/dotfiles-spec.md).
+
+
+Recommended: Simple interactive test
+docker run -it --rm ubuntu:24.04 bash
+Then inside:
+apt update && apt install -y curl git sudo
+export PATH="$HOME/bin:$PATH"
+curl -fsSL https://raw.githubusercontent.com/PoeAudits/dotfiles/main/install.sh | bash -s -- --mode server
