@@ -101,6 +101,7 @@ ensure_system_dependencies() {
     command -v unzip &>/dev/null || missing_deps+=("unzip")
     command -v tar &>/dev/null || missing_deps+=("tar")
     command -v git &>/dev/null || missing_deps+=("git")
+    command -v gcc &>/dev/null || missing_deps+=("gcc")  # Required for nvim-treesitter
     
     # Check if we need to install anything
     local need_install=false
@@ -118,7 +119,7 @@ ensure_system_dependencies() {
         
         if [[ "$os" == "arch" ]]; then
             # On Arch, only install what we need (ca-certificates is usually present)
-            sudo pacman -S --noconfirm --needed curl unzip tar git || {
+            sudo pacman -S --noconfirm --needed curl unzip tar git gcc || {
                 log_error "Failed to install system dependencies"
                 return 1
             }
@@ -128,7 +129,7 @@ ensure_system_dependencies() {
                 log_error "Failed to update package lists"
                 return 1
             }
-            sudo apt install -y curl unzip tar git ca-certificates || {
+            sudo apt install -y curl unzip tar git ca-certificates build-essential || {
                 log_error "Failed to install system dependencies"
                 return 1
             }

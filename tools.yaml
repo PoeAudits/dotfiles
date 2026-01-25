@@ -113,6 +113,12 @@ tools:
         export PATH="$PATH:$HOME/go/bin:/usr/local/go/bin"
         go install github.com/PoeAudits/overlord/cmd/overlord@latest
 
+  # opencode - AI coding agent for the terminal
+  opencode:
+    check: "opencode --version"
+    install:
+      all: "curl -fsSL https://opencode.ai/install | bash"
+
   # ===========================================================================
   # CLI Utilities (nice to have)
   # ===========================================================================

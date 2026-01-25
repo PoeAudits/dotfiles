@@ -7,6 +7,15 @@
 dot_config/hyper-whisper/
 {{ end }}
 
+# Repository files (not part of dotfiles)
+README.md
+ONBOARDING.md
+installation.md
+install.sh
+test-docker.sh
+tools.yaml
+thoughts/
+
 # Neovim files managed externally or generated
 # theme.lua is a symlink managed by Omarchy on desktop systems
 .config/nvim/lua/plugins/theme.lua
