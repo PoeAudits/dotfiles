@@ -47,8 +47,8 @@ find_gpg_key_for_hostname() {
     local key_id
     key_id=$(gpg --list-keys --with-colons 2>/dev/null | \
         awk -F: -v hostname="$HOSTNAME" '
-            /^pub:/ { current_key = $5 }
-            /^uid:/ && tolower($10) ~ tolower(hostname) { print current_key; exit }
+            /^fpr:/ { current_fpr = $10 }
+            /^uid:/ && tolower($10) ~ tolower(hostname) { print current_fpr; exit }
         ')
     echo "$key_id"
 }

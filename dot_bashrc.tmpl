@@ -162,10 +162,15 @@ if command -v direnv &>/dev/null; then
     eval "$(direnv hook bash)"
 fi
 
+{{ if eq .mode "server" -}}
+# Server mode: simple single-line prompt
+PS1='\u:\h@ \W\$ '
+{{ else -}}
 # Initialize starship prompt
 if command -v starship &>/dev/null; then
     eval "$(starship init bash)"
 fi
+{{ end -}}
 
 # ==============================================================================
 # Local Overrides
