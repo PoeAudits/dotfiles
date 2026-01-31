@@ -18,7 +18,7 @@ KEY_DIR="$HOME/.gnupg/public-keys"
 # ============================================================================
 
 log_info() {
-    echo "[Key Setup] $*"
+    echo "[Key Setup] $*" >&2
 }
 
 log_warn() {
@@ -66,7 +66,7 @@ generate_gpg_key() {
     log_info "Generating GPG key: $key_uid"
     
     # Generate primary signing key
-    gpg --batch --passphrase "" --pinentry-mode loopback --quick-gen-key "$key_uid" rsa4096 sign 3y
+    gpg --batch --passphrase "" --pinentry-mode loopback --quick-gen-key "$key_uid" rsa4096 sign 0
     
     # Get the new key ID
     local key_id
@@ -81,7 +81,7 @@ generate_gpg_key() {
     
     # Add encryption subkey
     log_info "Adding encryption subkey..."
-    gpg --batch --passphrase "" --pinentry-mode loopback --quick-add-key "$key_id" rsa4096 encr 3y
+    gpg --batch --passphrase "" --pinentry-mode loopback --quick-add-key "$key_id" rsa4096 encr 0
     
     log_info "GPG key generation complete"
     echo "$key_id"
@@ -232,7 +232,7 @@ main() {
         # Check for encryption subkey
         if ! key_has_encryption_subkey "$gpg_key_id"; then
             log_warn "GPG key missing encryption subkey! Adding one..."
-            gpg --batch --passphrase "" --pinentry-mode loopback --quick-add-key "$gpg_key_id" rsa4096 encr 3y
+            gpg --batch --passphrase "" --pinentry-mode loopback --quick-add-key "$gpg_key_id" rsa4096 encr 0
             log_info "Added encryption subkey"
         fi
     else

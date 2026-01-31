@@ -102,6 +102,10 @@ shopt -s globstar 2>/dev/null || true
 # Autocorrect minor spelling errors in cd
 shopt -s cdspell 2>/dev/null || true
 
+# Up/Down arrow: search history by prefix
+bind '"\e[A": history-search-backward' 2>/dev/null
+bind '"\e[B": history-search-forward' 2>/dev/null
+
 # Enable programmable completion
 if ! shopt -oq posix; then
     if [[ -f /usr/share/bash-completion/bash_completion ]]; then
