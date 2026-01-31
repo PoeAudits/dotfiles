@@ -144,12 +144,12 @@ show_new_store_instructions() {
     echo ""
     echo "  3. (Optional) Set up git for syncing:"
     echo "     pass git init"
-    echo "     pass git remote add origin git@github.com:USER/password-store.git"
+    echo "     pass git remote add origin git@github.com:PoeAudits/.password-store.git"
     echo "     pass git push -u origin master"
     echo ""
     echo "To clone an EXISTING password store (additional machine):"
     echo "  1. Clone the repository:"
-    echo "     git clone git@github.com:USER/password-store.git $PASSWORD_STORE_DIR"
+    echo "     git clone git@github.com:PoeAudits/.password-store.git $PASSWORD_STORE_DIR"
     echo ""
     echo "  2. Your GPG key must be authorized in the store's .gpg-id file"
     echo "     (See instructions above for adding a new key)"
@@ -229,8 +229,7 @@ main() {
             exit 0
         fi
     else
-        # Store doesn't exist, show setup instructions
-        show_new_store_instructions
+        # Store doesn't exist - instructions will be shown by post-setup script
         show_summary
         # Exit 0 so chezmoi doesn't fail
         exit 0

@@ -202,7 +202,7 @@ $(cat "$HOME/.ssh/id_ed25519.pub")
    pass git push
 
 4. Back on THIS machine ($HOSTNAME), clone password store:
-   git clone git@github.com:PoeAudits/password-store.git ~/.password-store
+   git clone git@github.com:PoeAudits/.password-store.git ~/.password-store
    pass ls
 
 For detailed instructions, see: GPG-GUIDE.md
@@ -251,9 +251,6 @@ main() {
     fi
     
     show_ssh_public_key
-    
-    # --- Show Next Steps ---
-    show_next_steps "$gpg_key_id"
     
     log_info "Key setup complete for $HOSTNAME"
 }
