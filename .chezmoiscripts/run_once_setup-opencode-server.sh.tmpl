@@ -1,0 +1,233 @@
+#!/bin/bash
+# Chezmoi run_once script: Setup OpenCode web server (systemd service)
+# Server-only: sets up opencode-web as a persistent systemd service
+# accessible via Tailscale from all devices.
+#
+# This script:
+#   1. Creates the opencode-web systemd service
+#   2. Installs a helper script to generate the env file from pass
+#   3. Enables the service (starts after env file is generated)
+
+{{ if ne .mode "server" -}}
+# Not a server, skip
+exit 0
+{{ end -}}
+
+set -Eeuo pipefail
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+SERVICE_NAME="opencode-web"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+ENV_FILE="$HOME/.config/opencode/server.env"
+OPENCODE_BIN="$HOME/.opencode/bin/opencode"
+HELPER_SCRIPT="$HOME/.local/bin/opencode-env"
+PORT=4096
+
+# ============================================================================
+# Logging
+# ============================================================================
+
+log_info() { echo "[OpenCode Server] $*"; }
+log_warn() { echo "[OpenCode Server] WARNING: $*" >&2; }
+log_error() { echo "[OpenCode Server] ERROR: $*" >&2; }
+
+# ============================================================================
+# Systemd Service
+# ============================================================================
+
+create_systemd_service() {
+    log_info "Creating systemd service: $SERVICE_FILE"
+
+    cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=OpenCode Web Server
+After=network.target tailscaled.service
+Wants=tailscaled.service
+
+[Service]
+Type=simple
+WorkingDirectory=$HOME
+EnvironmentFile=$ENV_FILE
+ExecStart=$OPENCODE_BIN web --port $PORT --hostname 0.0.0.0
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    log_info "Service file created"
+}
+
+# ============================================================================
+# Environment File Helper
+# ============================================================================
+
+create_env_helper() {
+    log_info "Creating env file helper: $HELPER_SCRIPT"
+
+    mkdir -p "$(dirname "$HELPER_SCRIPT")"
+
+    cat > "$HELPER_SCRIPT" <<'SCRIPT'
+#!/bin/bash
+# Generate OpenCode server environment file from pass
+# Usage: opencode-env [generate|check|path]
+set -Eeuo pipefail
+
+ENV_FILE="$HOME/.config/opencode/server.env"
+
+log_info() { echo "[opencode-env] $*"; }
+log_error() { echo "[opencode-env] ERROR: $*" >&2; }
+
+generate_env() {
+    if ! command -v pass &>/dev/null; then
+        log_error "pass is not installed"
+        return 1
+    fi
+
+    if ! pass ls &>/dev/null; then
+        log_error "pass is not accessible (GPG key issue?)"
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$ENV_FILE")"
+
+    log_info "Generating env file from pass..."
+
+    local tmpfile
+    tmpfile=$(mktemp)
+    trap 'rm -f "$tmpfile"' EXIT
+
+    # Read KEY=VALUE pairs from pass entry env/api-keys
+    if pass show env/api-keys &>/dev/null; then
+        pass show env/api-keys | while IFS= read -r line; do
+            # Skip empty lines and comments
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            # Only write valid KEY=VALUE pairs
+            if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+                echo "$line" >> "$tmpfile"
+            fi
+        done
+    else
+        log_error "pass entry 'env/api-keys' not found"
+        return 1
+    fi
+
+    # Also pull from env/shell if it exists
+    if pass show env/shell &>/dev/null; then
+        pass show env/shell | while IFS= read -r line; do
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+                echo "$line" >> "$tmpfile"
+            fi
+        done
+    fi
+
+    # Atomic move with restricted permissions
+    chmod 600 "$tmpfile"
+    mv "$tmpfile" "$ENV_FILE"
+    trap - EXIT
+
+    local count
+    count=$(wc -l < "$ENV_FILE")
+    log_info "Wrote $count environment variables to $ENV_FILE"
+    log_info "Restart the service: systemctl restart opencode-web"
+}
+
+check_env() {
+    if [[ ! -f "$ENV_FILE" ]]; then
+        echo "NOT FOUND: $ENV_FILE"
+        echo "Run: opencode-env generate"
+        return 1
+    fi
+
+    echo "Found: $ENV_FILE"
+    echo "Variables:"
+    # Show keys only, not values
+    sed 's/=.*/=***/' "$ENV_FILE"
+    echo ""
+    echo "Last modified: $(stat -c '%y' "$ENV_FILE" 2>/dev/null || stat -f '%Sm' "$ENV_FILE" 2>/dev/null)"
+}
+
+case "${1:-help}" in
+    generate|gen)
+        generate_env
+        ;;
+    check|status)
+        check_env
+        ;;
+    path)
+        echo "$ENV_FILE"
+        ;;
+    *)
+        echo "Usage: opencode-env <command>"
+        echo ""
+        echo "Commands:"
+        echo "  generate  Generate env file from pass (env/api-keys)"
+        echo "  check     Show env file status"
+        echo "  path      Print env file path"
+        ;;
+esac
+SCRIPT
+
+    chmod +x "$HELPER_SCRIPT"
+    log_info "Helper script created"
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+main() {
+    log_info "Setting up OpenCode web server..."
+
+    # Create systemd service
+    create_systemd_service
+
+    # Create env helper script
+    create_env_helper
+
+    # Reload systemd
+    systemctl daemon-reload
+    log_info "Systemd daemon reloaded"
+
+    # Enable service (don't start yet - env file may not exist)
+    systemctl enable "$SERVICE_NAME"
+    log_info "Service enabled (will start on boot)"
+
+    # Check if env file exists and start if so
+    if [[ -f "$ENV_FILE" ]]; then
+        log_info "Environment file found, starting service..."
+        systemctl start "$SERVICE_NAME"
+        sleep 2
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            log_info "Service is running!"
+            log_info "Health check: curl http://localhost:$PORT/global/health"
+        else
+            log_warn "Service failed to start. Check: journalctl -u $SERVICE_NAME"
+        fi
+    else
+        log_warn "Environment file not found: $ENV_FILE"
+        log_info "After setting up pass, run: opencode-env generate"
+        log_info "Then start the service: systemctl start $SERVICE_NAME"
+    fi
+
+    echo ""
+    log_info "Setup complete!"
+    log_info ""
+    log_info "Commands:"
+    log_info "  opencode-env generate         - Generate env file from pass"
+    log_info "  opencode-env check            - Check env file status"
+    log_info "  systemctl status $SERVICE_NAME  - Check service status"
+    log_info "  systemctl restart $SERVICE_NAME - Restart service"
+    log_info "  journalctl -u $SERVICE_NAME -f  - Follow logs"
+    log_info ""
+    log_info "Access:"
+    log_info "  TUI:  opencode attach http://<tailscale-ip>:$PORT"
+    log_info "  Web:  http://<tailscale-ip>:$PORT"
+}
+
+main "$@"

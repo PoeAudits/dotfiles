@@ -1,0 +1,71 @@
+#!/bin/bash
+# Chezmoi run_once script: Setup UFW firewall for Tailscale-only access
+# Server-only: configures UFW to deny all incoming traffic except
+# on the Tailscale interface (tailscale0).
+
+{{ if ne .mode "server" -}}
+# Not a server, skip
+exit 0
+{{ end -}}
+
+set -Eeuo pipefail
+
+# ============================================================================
+# Logging
+# ============================================================================
+
+log_info() { echo "[UFW Setup] $*"; }
+log_warn() { echo "[UFW Setup] WARNING: $*" >&2; }
+log_error() { echo "[UFW Setup] ERROR: $*" >&2; }
+
+# ============================================================================
+# Main
+# ============================================================================
+
+main() {
+    log_info "Configuring UFW firewall..."
+
+    # Install ufw if not present
+    if ! command -v ufw &>/dev/null; then
+        log_info "Installing UFW..."
+        if command -v apt &>/dev/null; then
+            apt update -qq && apt install -y ufw
+        elif command -v pacman &>/dev/null; then
+            pacman -S --noconfirm ufw
+        else
+            log_error "Cannot install UFW: unknown package manager"
+            exit 1
+        fi
+    fi
+
+    # Reset to defaults (deny incoming, allow outgoing)
+    log_info "Setting default policies..."
+    ufw default deny incoming
+    ufw default allow outgoing
+
+    # Allow all traffic on the Tailscale interface
+    log_info "Allowing traffic on tailscale0 interface..."
+    ufw allow in on tailscale0
+
+    # Allow Tailscale UDP port (41641) on all interfaces
+    # This is needed for Tailscale to establish direct connections
+    log_info "Allowing Tailscale WireGuard port (41641/udp)..."
+    ufw allow 41641/udp
+
+    # Enable UFW (non-interactive)
+    log_info "Enabling UFW..."
+    echo "y" | ufw enable
+
+    # Show status
+    echo ""
+    log_info "UFW status:"
+    ufw status verbose
+    echo ""
+
+    log_info "Firewall configured: all incoming denied except Tailscale"
+    log_info ""
+    log_info "Important: SSH is NOT allowed from the public internet."
+    log_info "Access this server only via Tailscale."
+}
+
+main "$@"

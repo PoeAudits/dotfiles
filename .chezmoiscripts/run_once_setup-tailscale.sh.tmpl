@@ -1,0 +1,79 @@
+#!/bin/bash
+# Chezmoi run_once script: Setup Tailscale
+# Ensures tailscaled is enabled and running, prompts for authentication.
+#
+# Tailscale installation is handled by tools.yaml (curl | sh).
+# This script handles the service enablement and auth flow.
+
+set -Eeuo pipefail
+
+# ============================================================================
+# Logging
+# ============================================================================
+
+log_info() { echo "[Tailscale Setup] $*"; }
+log_warn() { echo "[Tailscale Setup] WARNING: $*" >&2; }
+log_error() { echo "[Tailscale Setup] ERROR: $*" >&2; }
+
+# ============================================================================
+# Main
+# ============================================================================
+
+main() {
+    log_info "Setting up Tailscale..."
+
+    # Check if tailscale is installed
+    if ! command -v tailscale &>/dev/null; then
+        log_warn "Tailscale not installed yet (will be installed by tool installer)"
+        log_info "Run 'chezmoi apply' again after tools are installed"
+        exit 0
+    fi
+
+    # Enable and start tailscaled
+    if systemctl is-active --quiet tailscaled; then
+        log_info "tailscaled is already running"
+    else
+        log_info "Enabling and starting tailscaled..."
+        systemctl enable tailscaled
+        systemctl start tailscaled
+        log_info "tailscaled started"
+    fi
+
+    # Check connection status
+    local status
+    status=$(tailscale status --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('BackendState','Unknown'))" 2>/dev/null || echo "Unknown")
+
+    if [[ "$status" == "Running" ]]; then
+        log_info "Tailscale is connected to the tailnet"
+        local ip
+        ip=$(tailscale ip -4 2>/dev/null || echo "unknown")
+        log_info "Tailscale IP: $ip"
+    elif [[ "$status" == "NeedsLogin" || "$status" == "Stopped" || "$status" == "Unknown" ]]; then
+        log_warn "Tailscale needs authentication"
+        echo ""
+        echo "============================================"
+        echo "  Tailscale Authentication Required"
+        echo "============================================"
+        echo ""
+        echo "Run the following command to authenticate:"
+        echo ""
+        echo "  tailscale up"
+        echo ""
+        echo "This will print an auth URL. Open it in a browser"
+        echo "to connect this machine to your tailnet."
+        echo ""
+{{ if eq .mode "server" }}
+        echo "For a headless server, you may want:"
+        echo ""
+        echo "  tailscale up --ssh"
+        echo ""
+        echo "This enables Tailscale SSH (no need for regular SSH)."
+        echo ""
+{{ end }}
+        echo "============================================"
+    else
+        log_info "Tailscale status: $status"
+    fi
+}
+
+main "$@"

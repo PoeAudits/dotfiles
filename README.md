@@ -66,6 +66,10 @@ Chezmoi prompts for a mode during setup. This affects which files are installed 
 - Headless-optimized configuration
 - Minimal prompt settings
 - No GUI-related configs
+- **Tailscale** mesh VPN (enabled and started)
+- **UFW** firewall (deny all incoming except Tailscale)
+- **OpenCode web server** as a systemd service (port 4096)
+- `opencode-env` helper script for managing API keys
 
 The mode is stored in `~/.config/chezmoi/chezmoi.toml` and used by templates:
 
@@ -75,6 +79,52 @@ The mode is stored in `~/.config/chezmoi/chezmoi.toml` and used by templates:
 # Desktop-specific config
 {{ end }}
 ```
+
+### Server-Only Setup Scripts
+
+On server mode, chezmoi automatically runs these additional setup scripts:
+
+| Script | Purpose |
+|--------|---------|
+| `run_once_setup-tailscale.sh` | Enables `tailscaled`, checks auth status |
+| `run_once_setup-ufw.sh` | Configures UFW: deny all, allow Tailscale interface |
+| `run_once_setup-opencode-server.sh` | Creates `opencode-web` systemd service + `opencode-env` helper |
+
+### OpenCode Server (Server Mode)
+
+The server runs `opencode web --port 4096 --hostname 0.0.0.0` as a systemd service. All traffic is restricted to the Tailscale mesh by UFW.
+
+```
+Phone (Tailscale) ──────────────┐
+                                │
+Desktop (opencode attach) ──────┼──▶  opencode web (:4096)  ──▶  LLM APIs
+                                │      (systemd service)
+Laptop (opencode attach) ───────┘      WorkingDirectory=~
+                                       Binds 0.0.0.0:4096
+                                       (UFW restricts to Tailscale)
+```
+
+**Access:**
+- TUI: `opencode attach http://<tailscale-ip>:4096`
+- Web UI: `http://<tailscale-ip>:4096` (from phone browser)
+- Health: `curl http://localhost:4096/global/health`
+
+**Managing API keys:**
+
+The service loads API keys from `~/.config/opencode/server.env` (an `EnvironmentFile`). Use the `opencode-env` helper to generate it from `pass`:
+
+```bash
+# Generate env file from pass (env/api-keys and env/shell entries)
+opencode-env generate
+
+# Check current env file status (shows keys, not values)
+opencode-env check
+
+# Restart service to pick up new keys
+systemctl restart opencode-web
+```
+
+The env file is NOT generated automatically during install because `pass` may not be configured yet on a fresh machine. After setting up pass, run `opencode-env generate` and then start the service.
 
 ## Secrets Management
 
@@ -283,9 +333,13 @@ dotfiles/
 ├── .chezmoi.toml.tmpl          # Machine config template
 ├── .chezmoiignore              # Files to skip by mode
 ├── .chezmoiscripts/
-│   ├── run_once_setup-gpg.sh.tmpl
-│   ├── run_once_setup-pass.sh.tmpl
-│   └── run_onchange_install-tools.sh.tmpl
+│   ├── run_once_clone-repos.sh.tmpl    # Clone .opencode and .agents repos
+│   ├── run_once_setup-gpg.sh.tmpl      # Per-machine GPG + SSH keys
+│   ├── run_once_setup-pass.sh.tmpl     # Verify pass setup
+│   ├── run_once_setup-tailscale.sh.tmpl      # Enable tailscaled + auth
+│   ├── run_once_setup-ufw.sh.tmpl            # Firewall (server only)
+│   ├── run_once_setup-opencode-server.sh.tmpl # OpenCode systemd (server only)
+│   └── run_onchange_install-tools.sh.tmpl    # Install tools from tools.yaml
 ├── dot_config/
 │   ├── nvim/                   # Neovim (LazyVim)
 │   ├── tmux/                   # tmux config
@@ -307,6 +361,10 @@ dotfiles/
 
 ## Useful Commands
 
+Run `make help` in the chezmoi source directory to see all available Makefile targets.
+
+### Chezmoi
+
 | Command | Description |
 |---------|-------------|
 | `chezmoi update` | Pull and apply latest changes |
@@ -316,6 +374,17 @@ dotfiles/
 | `chezmoi cd` | Open source directory |
 | `chezmoi status` | Show managed file status |
 | `chezmoi data` | Show template data |
+
+### Server (OpenCode)
+
+| Command | Description |
+|---------|-------------|
+| `opencode-env generate` | Generate env file from pass |
+| `opencode-env check` | Show env file status |
+| `systemctl status opencode-web` | Check service status |
+| `systemctl restart opencode-web` | Restart service |
+| `journalctl -u opencode-web -f` | Follow service logs |
+| `opencode attach http://<ip>:4096` | Connect TUI to server |
 
 ## Security Notes
 

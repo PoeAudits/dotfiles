@@ -200,3 +200,10 @@ tools:
         curl -Lo /tmp/delta.deb "https://github.com/dandavison/delta/releases/latest/download/git-delta_${DELTA_VERSION}_amd64.deb"
         sudo dpkg -i /tmp/delta.deb
         rm /tmp/delta.deb
+
+  # xclip - X11 clipboard utility
+  xclip:
+    check: "xclip -version"
+    install:
+      arch: "sudo pacman -S --noconfirm xclip"
+      ubuntu: "sudo apt install -y xclip"

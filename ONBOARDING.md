@@ -10,6 +10,71 @@ This setup uses **per-machine GPG keys** for security and revocability. Each mac
 
 ---
 
+## SSH Key Setup (GitHub Authentication)
+
+SSH keys are required to push/pull the password-store repository from GitHub. Set this up on each new machine before git operations.
+
+### 1. Generate SSH Key
+
+```bash
+# Generate ed25519 key (recommended)
+ssh-keygen -t ed25519 -C "your-email@example.com"
+```
+
+Press Enter to accept the default location (`~/.ssh/id_ed25519`). Optionally set a passphrase for extra security.
+
+### 2. Start SSH Agent and Add Key
+
+```bash
+# Start the SSH agent
+eval "$(ssh-agent -s)"
+
+# Add your key to the agent
+ssh-add ~/.ssh/id_ed25519
+```
+
+**Optional:** To auto-start the agent, add to `~/.bashrc` or `~/.zshrc`:
+
+```bash
+if [ -z "$SSH_AUTH_SOCK" ]; then
+    eval "$(ssh-agent -s)" > /dev/null
+    ssh-add ~/.ssh/id_ed25519 2>/dev/null
+fi
+```
+
+### 3. Add Public Key to GitHub
+
+```bash
+# Display your public key
+cat ~/.ssh/id_ed25519.pub
+```
+
+Then:
+1. Go to https://github.com/settings/keys
+2. Click **"New SSH key"**
+3. Title: Use machine hostname (e.g., `vps`, `laptop`, `desktop`)
+4. Key type: **Authentication Key**
+5. Paste the public key
+6. Click **"Add SSH key"**
+
+### 4. Test Connection
+
+```bash
+ssh -T git@github.com
+```
+
+Expected output:
+```
+Hi your-username! You've successfully authenticated, but GitHub does not provide shell access.
+```
+
+**Troubleshooting:** If you see "Permission denied", verify:
+- The public key is added to GitHub
+- The SSH agent is running (`ssh-add -l` should list your key)
+- You're using the correct GitHub username
+
+---
+
 ## First Machine Setup
 
 Use this flow when setting up pass for the first time.
@@ -17,11 +82,50 @@ Use this flow when setting up pass for the first time.
 ### 1. Generate GPG Key
 
 ```bash
-# Generate key with hostname identifier (with signing capability for pass)
+# Generate key with hostname identifier
+# Format: "Name (machine-identifier) <email>"
 gpg --quick-gen-key "Thomas ($(hostname)) <your-email@example.com>" rsa4096
 ```
 
-**Note the key ID** from the output (8-character hex string).
+**Naming convention:** Use a short machine identifier in parentheses:
+- `Thomas (laptop) <email>` - for your laptop
+- `Thomas (desktop) <email>` - for your desktop  
+- `Thomas (vps) <email>` - for a VPS/server
+
+#### Verify Key Creation
+
+```bash
+# List your keys
+gpg --list-keys
+```
+
+Example output:
+```
+pub   rsa4096 2026-01-25 [SC]
+      ABC123DEF456789012345678901234567890ABCD
+uid           [ultimate] Thomas (laptop) <your-email@example.com>
+```
+
+- **Key ID:** The 40-character hex string (e.g., `ABC123DEF456789012345678901234567890ABCD`)
+- **`[ultimate]`:** Normal - means this is YOUR key (you have the private key)
+
+#### If You Need to Regenerate
+
+If you made a mistake (wrong name, etc.), delete and recreate:
+
+```bash
+# Get your key ID first
+gpg --list-keys
+
+# Delete secret (private) key first
+gpg --delete-secret-keys <key-id>
+
+# Then delete public key
+gpg --delete-keys <key-id>
+
+# Now regenerate with correct info
+gpg --quick-gen-key "Thomas (correct-name) <your-email@example.com>" rsa4096
+```
 
 ### 2. Initialize pass Store
 
@@ -67,52 +171,103 @@ git push -u origin main
 
 Use this flow when setting up pass on a second, third, etc. machine.
 
+### Prerequisites on New Machine
+
+1. **SSH key set up** - See [SSH Key Setup](#ssh-key-setup-github-authentication) above
+2. **GPG installed** - Usually pre-installed, verify with `gpg --version`
+
 ### On the New Machine
 
-#### 1. Run Chezmoi Init
+#### 1. Generate GPG Key
 
 ```bash
-# Bootstrap dotfiles (includes GPG setup)
-curl -fsSL https://raw.githubusercontent.com/your-username/dotfiles/main/install.sh | bash
+# Generate key with machine identifier
+# Use a short, descriptive name for this machine
+gpg --quick-gen-key "Thomas (vps) <your-email@example.com>" rsa4096
 ```
 
-This generates a GPG key automatically. If you need to generate manually:
+**Naming examples:**
+- `Thomas (vps)` - for a VPS/server
+- `Thomas (work-laptop)` - for work machine
+- `Thomas (home-desktop)` - for home machine
+
+#### 2. Verify Key Creation
 
 ```bash
-gpg --quick-gen-key "Thomas ($(hostname)) <your-email@example.com>" rsa4096
+gpg --list-keys
 ```
 
-#### 2. Export Public Key
+Example output:
+```
+pub   rsa4096 2026-01-25 [SC]
+      ABC123DEF456789012345678901234567890ABCD
+uid           [ultimate] Thomas (vps) <your-email@example.com>
+```
+
+**Note:** `[ultimate]` trust is normal - it means this is your own key.
+
+#### 3. If You Need to Regenerate
+
+Made a mistake? Delete and recreate:
 
 ```bash
-# Get your new key ID
+# Delete secret key first, then public key
+gpg --delete-secret-keys <key-id>
+gpg --delete-keys <key-id>
+
+# Regenerate
+gpg --quick-gen-key "Thomas (correct-name) <your-email@example.com>" rsa4096
+```
+
+#### 4. Export Public Key
+
+```bash
+# Get your key ID
 gpg --list-keys
 
-# Export public key
+# Export public key to file
 gpg --armor --export <new-machine-key-id> > ~/new-machine.pub.asc
 ```
 
-#### 3. Transfer Public Key to Existing Machine
+#### 5. Transfer Public Key to Existing Machine
 
 ```bash
-# Copy to existing machine (use scp, rsync, or paste via SSH)
-scp ~/new-machine.pub.asc existing-machine:~/
+# Option 1: SCP (if you have SSH access)
+scp ~/new-machine.pub.asc user@existing-machine:~/
+
+# Option 2: Display and copy-paste via SSH
+cat ~/new-machine.pub.asc
+# Then SSH to existing machine and paste into a file
 ```
 
 ### On an Existing Machine
 
-#### 4. Import New Machine's Public Key
+#### 6. Import New Machine's Public Key
 
 ```bash
 # Import the public key
 gpg --import ~/new-machine.pub.asc
 
-# Trust the key (optional but recommended)
-gpg --edit-key <new-machine-key-id>
-# In GPG prompt: type "trust", select "5" (ultimate), then "quit"
+# Verify import
+gpg --list-keys
+# Should show the new machine's key
 ```
 
-#### 5. Add Key to pass and Re-encrypt
+#### 7. Trust the Key (Recommended)
+
+```bash
+gpg --edit-key <new-machine-key-id>
+```
+
+In the GPG prompt:
+```
+gpg> trust
+Your decision? 5  (ultimate trust)
+Do you really want to set this key to ultimate trust? y
+gpg> quit
+```
+
+#### 8. Add Key to pass and Re-encrypt
 
 ```bash
 # Navigate to pass store
@@ -134,18 +289,136 @@ pass git push
 
 ### Back on the New Machine
 
-#### 6. Clone pass Repository
+#### 9. Clone pass Repository
 
 ```bash
 # Clone the password store
 git clone git@github.com:your-username/password-store.git ~/.password-store
+```
 
-# Verify you can access secrets
+#### 10. Verify Access
+
+```bash
+# List all secrets
 pass ls
+
+# Try decrypting a secret
 pass show dev/openai-api-key
 ```
 
+If you see `gpg: decryption failed: No secret key`, the re-encryption on the existing machine didn't include your key. Go back to step 8 and verify your key ID is in `.gpg-id`.
+
 **Done!** The new machine can now access all secrets.
+
+---
+
+## Tailscale Setup
+
+Tailscale is installed automatically via `tools.yaml`. The `run_once_setup-tailscale.sh` script enables and starts `tailscaled`, but authentication requires manual action.
+
+### Step 1: Authenticate
+
+```bash
+# For desktops/laptops
+tailscale up
+
+# For headless servers (enables Tailscale SSH)
+tailscale up --ssh
+```
+
+This prints an auth URL. Open it in your browser and approve the device in your Tailscale admin console.
+
+### Step 2: Verify connection
+
+```bash
+tailscale status
+tailscale ip -4    # Show your Tailscale IP
+```
+
+### Step 3: Firewall (servers only)
+
+On server mode, UFW is configured automatically by `run_once_setup-ufw.sh`:
+- Deny all incoming traffic
+- Allow all traffic on `tailscale0` interface
+- Allow Tailscale WireGuard port (41641/udp)
+
+Verify with:
+
+```bash
+ufw status verbose
+```
+
+After UFW is enabled, SSH is only accessible via Tailscale. Do NOT disconnect your current session until you've verified Tailscale connectivity from another device.
+
+---
+
+## OpenCode Server Setup (Server Mode Only)
+
+On server mode, chezmoi creates a systemd service for `opencode web` and a helper script for managing API keys. The service listens on port 4096 and is accessible from all Tailscale devices.
+
+### Architecture
+
+```
+Phone (Tailscale) ──────────────┐
+                                │
+Desktop (opencode attach) ──────┼──▶  opencode web (:4096)
+                                │      (systemd service)
+Laptop (opencode attach) ───────┘      WorkingDirectory=~
+                                       Binds 0.0.0.0:4096
+```
+
+### Step 1: Generate the environment file
+
+The service needs API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GITHUB_TOKEN`, etc.). These are loaded from `~/.config/opencode/server.env`, generated from `pass`.
+
+This step requires pass to be fully set up first (GPG key generated, password store cloned, decryption verified).
+
+```bash
+# Generate env file from pass entries (env/api-keys and env/shell)
+opencode-env generate
+
+# Verify the file was created
+opencode-env check
+```
+
+### Step 2: Start the service
+
+```bash
+systemctl start opencode-web
+```
+
+The service is already enabled (starts on boot). Check status:
+
+```bash
+systemctl status opencode-web
+curl http://localhost:4096/global/health
+```
+
+### Step 3: Connect from other devices
+
+From desktop/laptop (over Tailscale):
+
+```bash
+opencode attach http://<tailscale-ip>:4096
+
+# Attach to a specific project
+opencode attach --dir=/root/Overlord/projects/web/my-project http://<tailscale-ip>:4096
+```
+
+From phone: open `http://<tailscale-ip>:4096` in your browser.
+
+### Managing the service
+
+```bash
+# View logs
+journalctl -u opencode-web -f
+
+# Restart after updating keys or opencode binary
+systemctl restart opencode-web
+
+# Regenerate env file (e.g., after key rotation)
+opencode-env generate && systemctl restart opencode-web
+```
 
 ---
 
@@ -258,18 +531,15 @@ quit
 
 **Symptom:** `pass git push` fails with authentication error
 
-**Fix:** Ensure SSH key is added to GitHub:
+**Fix:** Ensure SSH key is set up correctly. See [SSH Key Setup](#ssh-key-setup-github-authentication) section above.
 
+Quick verification:
 ```bash
-# Generate SSH key if needed
-ssh-keygen -t ed25519 -C "your-email@example.com"
+# Check if SSH agent has your key loaded
+ssh-add -l
 
-# Add to SSH agent
-eval "$(ssh-agent -s)"
-ssh-add ~/.ssh/id_ed25519
-
-# Copy public key and add to GitHub
-cat ~/.ssh/id_ed25519.pub
+# Test GitHub connection
+ssh -T git@github.com
 ```
 
 ### Secrets Not Loading in Shell
@@ -345,6 +615,15 @@ gpg --armor --export <key-id>
 
 # Import public key
 gpg --import keyfile.asc
+
+# Delete GPG key (for regeneration)
+gpg --delete-secret-keys <key-id>
+gpg --delete-keys <key-id>
+
+# SSH key management
+ssh-keygen -t ed25519 -C "email"   # Generate key
+ssh-add -l                          # List loaded keys
+ssh -T git@github.com               # Test GitHub connection
 ```
 
 ### File Locations
@@ -352,6 +631,7 @@ gpg --import keyfile.asc
 - **pass store:** `~/.password-store/`
 - **GPG keys:** `~/.gnupg/`
 - **GPG config:** `~/.gnupg/gpg.conf`, `~/.gnupg/gpg-agent.conf`
+- **SSH keys:** `~/.ssh/id_ed25519` (private), `~/.ssh/id_ed25519.pub` (public)
 - **Chezmoi source:** `~/.local/share/chezmoi/`
 
 ---
@@ -368,14 +648,17 @@ gpg --import keyfile.asc
 
 ## Workflow Summary
 
-| Action | Command |
-|--------|---------|
-| First machine setup | `pass init <key-id>` → add secrets → `pass git push` |
-| Add new machine | Generate key → export pub key → import on existing → add to `.gpg-id` → `pass init` → push |
-| Remove machine | Remove from `.gpg-id` → `pass init` → push |
-| Add secret | `pass insert path/to/secret` |
-| Sync changes | `pass git pull` or `pass git push` |
-| Verify access | `pass ls` and `pass show path/to/secret` |
+| Action | Steps |
+|--------|-------|
+| **SSH setup** | `ssh-keygen` → add to GitHub → `ssh -T git@github.com` |
+| **GPG key setup** | `gpg --quick-gen-key "Name (machine) <email>" rsa4096` → verify with `gpg --list-keys` |
+| **First machine** | SSH setup → GPG setup → `pass init <key-id>` → add secrets → `pass git push` |
+| **Add new machine** | SSH setup → GPG setup → export pub key → import on existing → add to `.gpg-id` → `pass init` → push → clone on new machine |
+| **Remove machine** | Remove from `.gpg-id` → `pass init` → push |
+| **Add secret** | `pass insert path/to/secret` |
+| **Sync changes** | `pass git pull` or `pass git push` |
+| **Verify access** | `pass ls` and `pass show path/to/secret` |
+| **Regenerate GPG key** | `gpg --delete-secret-keys <id>` → `gpg --delete-keys <id>` → regenerate |
 
 ---
 
