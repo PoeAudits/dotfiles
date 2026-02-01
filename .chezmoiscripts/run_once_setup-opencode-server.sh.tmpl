@@ -101,29 +101,33 @@ generate_env() {
     tmpfile=$(mktemp)
     trap 'rm -f "$tmpfile"' EXIT
 
-    # Read KEY=VALUE pairs from pass entry env/api-keys
-    if pass show env/api-keys &>/dev/null; then
-        pass show env/api-keys | while IFS= read -r line; do
-            # Skip empty lines and comments
-            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-            # Only write valid KEY=VALUE pairs
-            if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                echo "$line" >> "$tmpfile"
-            fi
-        done
-    else
-        log_error "pass entry 'env/api-keys' not found"
-        return 1
-    fi
+    # Iterate over all pass entries and convert to ENV_VAR=value pairs
+    # Entry name: anthropic-api-key -> ANTHROPIC_API_KEY
+    local count=0
+    while IFS= read -r entry; do
+        [[ -z "$entry" ]] && continue
+        # Skip directories (entries containing /)
+        [[ "$entry" == */ ]] && continue
 
-    # Also pull from env/shell if it exists
-    if pass show env/shell &>/dev/null; then
-        pass show env/shell | while IFS= read -r line; do
-            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-            if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                echo "$line" >> "$tmpfile"
-            fi
-        done
+        local value
+        value=$(pass show "$entry" 2>/dev/null | head -1) || continue
+        [[ -z "$value" ]] && continue
+
+        # Convert entry name to ENV_VAR format: lowercase-dashes -> UPPERCASE_UNDERSCORES
+        local var_name
+        var_name=$(echo "$entry" | tr '[:lower:]-' '[:upper:]_')
+
+        echo "${var_name}=${value}" >> "$tmpfile"
+        log_info "  $var_name"
+        ((count++))
+    done < <(find "${PASSWORD_STORE_DIR:-$HOME/.password-store}" -name '*.gpg' -type f | \
+        sed "s|${PASSWORD_STORE_DIR:-$HOME/.password-store}/||; s|\.gpg$||" | sort)
+
+    if [[ "$count" -eq 0 ]]; then
+        log_error "No entries found in pass"
+        rm -f "$tmpfile"
+        trap - EXIT
+        return 1
     fi
 
     # Atomic move with restricted permissions
@@ -131,8 +135,6 @@ generate_env() {
     mv "$tmpfile" "$ENV_FILE"
     trap - EXIT
 
-    local count
-    count=$(wc -l < "$ENV_FILE")
     log_info "Wrote $count environment variables to $ENV_FILE"
     log_info "Restart the service: systemctl restart opencode-web"
 }

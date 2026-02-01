@@ -10,6 +10,10 @@ dot_config/hyper-whisper/
 # Repository files (not part of dotfiles)
 README.md
 ONBOARDING.md
+AGENTS.md
+CONTRIBUTING.md
+GPG-GUIDE.md
+Makefile
 installation.md
 install.sh
 test-docker.sh
