@@ -119,7 +119,7 @@ generate_env() {
 
         echo "${var_name}=${value}" >> "$tmpfile"
         log_info "  $var_name"
-        ((count++))
+        count=$((count + 1))
     done < <(find "${PASSWORD_STORE_DIR:-$HOME/.password-store}" -name '*.gpg' -type f | \
         sed "s|${PASSWORD_STORE_DIR:-$HOME/.password-store}/||; s|\.gpg$||" | sort)
 
