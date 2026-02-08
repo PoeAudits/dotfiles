@@ -6,6 +6,10 @@
 
 set -Eeuo pipefail
 
+# Make common user-local install locations available in-process.
+# Many upstream installers modify shell rc files, which won't affect this run.
+export PATH="$HOME/.local/bin:$HOME/bin:$HOME/go/bin:$HOME/.opencode/bin:$HOME/.bun/bin:$HOME/.foundry/bin:$HOME/.cargo/bin:/usr/local/go/bin:$PATH"
+
 # Avoid interactive prompts during package installation
 export DEBIAN_FRONTEND=noninteractive
 export TZ=UTC
@@ -102,6 +106,7 @@ ensure_system_dependencies() {
     command -v tar &>/dev/null || missing_deps+=("tar")
     command -v git &>/dev/null || missing_deps+=("git")
     command -v gcc &>/dev/null || missing_deps+=("gcc")  # Required for nvim-treesitter
+    command -v python3 &>/dev/null || missing_deps+=("python3")
     
     # Check if we need to install anything
     local need_install=false
@@ -119,7 +124,7 @@ ensure_system_dependencies() {
         
         if [[ "$os" == "arch" ]]; then
             # On Arch, only install what we need (ca-certificates is usually present)
-            sudo pacman -S --noconfirm --needed curl unzip tar git gcc || {
+            sudo pacman -S --noconfirm --needed curl unzip tar git gcc python || {
                 log_error "Failed to install system dependencies"
                 return 1
             }
@@ -129,7 +134,7 @@ ensure_system_dependencies() {
                 log_error "Failed to update package lists"
                 return 1
             }
-            sudo apt install -y curl unzip tar git ca-certificates build-essential || {
+            sudo apt install -y curl unzip tar git ca-certificates build-essential python3 || {
                 log_error "Failed to install system dependencies"
                 return 1
             }
@@ -272,9 +277,19 @@ install_tool() {
 
     # Run install command in a subshell to isolate environment changes
     if (eval "$install_cmd"); then
-        log_success "$tool installed successfully"
-        INSTALLED_TOOLS+=("$tool")
-        return 0
+        hash -r 2>/dev/null || true
+        local check_cmd
+        check_cmd=$(get_check_command "$tool")
+        if is_tool_installed "$check_cmd"; then
+            log_success "$tool installed successfully"
+            INSTALLED_TOOLS+=("$tool")
+            return 0
+        fi
+
+        log_warn "$tool install command succeeded, but check still fails"
+        log_warn "This is usually a PATH issue. Current PATH: $PATH"
+        FAILED_TOOLS+=("$tool (installed but not detected)")
+        return 1
     else
         log_error "Failed to install $tool"
         FAILED_TOOLS+=("$tool")
@@ -333,8 +348,8 @@ print_summary() {
 
     if [[ ${#INSTALLED_TOOLS[@]} -gt 0 ]]; then
         echo ""
-        echo "Note: You may need to restart your shell or run 'source ~/.bashrc'"
-        echo "      (or ~/.zshrc) for PATH changes to take effect."
+        echo "Note: This run prepends common install locations to PATH so new tools are usable immediately."
+        echo "      If your interactive shell still can't find a tool, restart it (e.g. 'exec \$SHELL')."
     fi
 }
 

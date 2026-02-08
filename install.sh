@@ -8,6 +8,10 @@
 
 set -Eeuo pipefail
 
+# Make common user-local install locations available in-process.
+# This avoids requiring a shell restart after chezmoi applies tool installers.
+export PATH="$HOME/.local/bin:$HOME/bin:$HOME/go/bin:$HOME/.opencode/bin:/usr/local/go/bin:$PATH"
+
 # ============================================================================
 # Configuration
 # ============================================================================
@@ -204,6 +208,10 @@ configure_syncthing_service() {
     local mode="$1"
 
     log_info "Enabling syncthing user service..."
+    # Ensure user services start at boot on headless servers.
+    if [[ "$mode" == "server" ]] && command -v loginctl &>/dev/null; then
+        loginctl enable-linger "${USER}" &>/dev/null || true
+    fi
     systemctl --user enable syncthing.service || {
         log_error "Failed to enable syncthing user service"
         return 1
@@ -365,8 +373,11 @@ bootstrap_overlord() {
 
     if ! command -v overlord &>/dev/null; then
         log_error "overlord command not found"
-        log_info "Install Overlord first, then run: overlord setup --init"
-        return 1
+        log_info "This usually means it's installed but not on PATH yet. Try:"
+        log_info "  export PATH=\"$HOME/.local/bin:$HOME/go/bin:/usr/local/go/bin:\$PATH\""
+        log_info "Then re-run: overlord setup --init"
+        # Non-fatal: the rest of the machine setup is still useful.
+        return 0
     fi
 
     log_info "Running: overlord setup --init"
@@ -431,7 +442,7 @@ main() {
     install_pulse "$MODE"
 
     # Bootstrap Overlord machine config + Syncthing config folder
-    bootstrap_overlord || exit 1
+    bootstrap_overlord || true
     
     # Show post-install instructions
     show_post_install

@@ -22,7 +22,7 @@ set -Eeuo pipefail
 SERVICE_NAME="opencode-web"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 ENV_FILE="$HOME/.config/opencode/server.env"
-OPENCODE_BIN="$HOME/.opencode/bin/opencode"
+OPENCODE_BIN=""
 HELPER_SCRIPT="$HOME/.local/bin/opencode-env"
 PORT=4096
 
@@ -44,13 +44,14 @@ create_systemd_service() {
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=OpenCode Web Server
-After=network.target tailscaled.service
-Wants=tailscaled.service
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
+ConditionPathExists=$ENV_FILE
 
 [Service]
 Type=simple
 WorkingDirectory=$HOME
-EnvironmentFile=$ENV_FILE
+EnvironmentFile=-$ENV_FILE
 ExecStart=$OPENCODE_BIN web --port $PORT --hostname 0.0.0.0
 Restart=on-failure
 RestartSec=5
@@ -113,9 +114,15 @@ generate_env() {
         value=$(pass show "$entry" 2>/dev/null | head -1) || continue
         [[ -z "$value" ]] && continue
 
-        # Convert entry name to ENV_VAR format: lowercase-dashes -> UPPERCASE_UNDERSCORES
+        # Convert entry name to ENV_VAR format.
+        # Example: anthropic-api-key -> ANTHROPIC_API_KEY
+        # Example: foo/bar.baz -> FOO_BAR_BAZ
         local var_name
-        var_name=$(echo "$entry" | tr '[:lower:]-' '[:upper:]_')
+        var_name=${entry//\//_}
+        var_name=${var_name//./_}
+        var_name=$(echo "$var_name" | tr '[:lower:]-' '[:upper:]_')
+        # Collapse repeated underscores
+        var_name=$(echo "$var_name" | tr -s '_')
 
         echo "${var_name}=${value}" >> "$tmpfile"
         log_info "  $var_name"
@@ -186,6 +193,17 @@ SCRIPT
 main() {
     log_info "Setting up OpenCode web server..."
 
+    # Resolve opencode binary path (installer may not update PATH in this run)
+    if command -v opencode &>/dev/null; then
+        OPENCODE_BIN=$(command -v opencode)
+    elif [[ -x "$HOME/.opencode/bin/opencode" ]]; then
+        OPENCODE_BIN="$HOME/.opencode/bin/opencode"
+    else
+        log_warn "opencode binary not found yet"
+        log_info "Install opencode, then re-run: chezmoi apply"
+        exit 0
+    fi
+
     # Create systemd service
     create_systemd_service
 
@@ -196,9 +214,9 @@ main() {
     systemctl daemon-reload
     log_info "Systemd daemon reloaded"
 
-    # Enable service (don't start yet - env file may not exist)
+    # Enable service. It won't start until ENV_FILE exists (ConditionPathExists).
     systemctl enable "$SERVICE_NAME"
-    log_info "Service enabled (will start on boot)"
+    log_info "Service enabled (will start when env file exists)"
 
     # Check if env file exists and start if so
     if [[ -f "$ENV_FILE" ]]; then

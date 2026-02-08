@@ -32,7 +32,12 @@ tools:
         sudo rm -rf /usr/local/go
         sudo tar -C /usr/local -xzf "go${GO_VERSION}.linux-amd64.tar.gz"
         rm "go${GO_VERSION}.linux-amd64.tar.gz"
-        echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.profile
+        # Make Go usable immediately in this run
+        export PATH="/usr/local/go/bin:$PATH"
+        # Persist for future login shells (idempotent)
+        if ! grep -qs "/usr/local/go/bin" "$HOME/.profile" 2>/dev/null; then
+          echo 'export PATH="$PATH:/usr/local/go/bin"' >> "$HOME/.profile"
+        fi
 
   # Bun - JavaScript runtime and package manager
   bun:
@@ -111,7 +116,8 @@ tools:
     install:
       all: |
         export PATH="$PATH:$HOME/go/bin:/usr/local/go/bin"
-        go install github.com/PoeAudits/overlord/cmd/overlord@latest
+        mkdir -p "$HOME/.local/bin"
+        GOBIN="$HOME/.local/bin" go install github.com/PoeAudits/overlord/cmd/overlord@latest
 
   # opencode - AI coding agent for the terminal
   opencode:

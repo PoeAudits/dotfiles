@@ -25,13 +25,36 @@ log_error() { echo "[UFW Setup] ERROR: $*" >&2; }
 main() {
     log_info "Configuring UFW firewall..."
 
+    # Only lock down to Tailscale once the machine is connected.
+    if ! command -v tailscale &>/dev/null; then
+        log_warn "Tailscale not installed yet; skipping UFW lock-down"
+        log_info "After installing/authenticating Tailscale, re-run: chezmoi apply"
+        exit 0
+    fi
+
+    backend_state=$(tailscale status --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('BackendState','Unknown'))" 2>/dev/null || echo "Unknown")
+    if [[ "$backend_state" != "Running" ]]; then
+        log_warn "Tailscale not connected yet (BackendState=$backend_state); skipping UFW lock-down"
+        log_info "Authenticate first: tailscale up --ssh"
+        exit 0
+    fi
+
+    as_root() {
+        if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+            "$@"
+        else
+            sudo "$@"
+        fi
+    }
+
     # Install ufw if not present
     if ! command -v ufw &>/dev/null; then
         log_info "Installing UFW..."
         if command -v apt &>/dev/null; then
-            apt update -qq && apt install -y ufw
+            as_root apt update -qq
+            as_root apt install -y ufw
         elif command -v pacman &>/dev/null; then
-            pacman -S --noconfirm ufw
+            as_root pacman -S --noconfirm ufw
         else
             log_error "Cannot install UFW: unknown package manager"
             exit 1
@@ -40,26 +63,26 @@ main() {
 
     # Reset to defaults (deny incoming, allow outgoing)
     log_info "Setting default policies..."
-    ufw default deny incoming
-    ufw default allow outgoing
+    as_root ufw default deny incoming
+    as_root ufw default allow outgoing
 
     # Allow all traffic on the Tailscale interface
     log_info "Allowing traffic on tailscale0 interface..."
-    ufw allow in on tailscale0
+    as_root ufw allow in on tailscale0
 
     # Allow Tailscale UDP port (41641) on all interfaces
     # This is needed for Tailscale to establish direct connections
     log_info "Allowing Tailscale WireGuard port (41641/udp)..."
-    ufw allow 41641/udp
+    as_root ufw allow 41641/udp
 
     # Enable UFW (non-interactive)
     log_info "Enabling UFW..."
-    echo "y" | ufw enable
+    as_root ufw --force enable
 
     # Show status
     echo ""
     log_info "UFW status:"
-    ufw status verbose
+    as_root ufw status verbose
     echo ""
 
     log_info "Firewall configured: all incoming denied except Tailscale"
