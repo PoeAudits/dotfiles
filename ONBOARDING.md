@@ -140,8 +140,8 @@ This creates `~/.password-store/` with a `.gpg-id` file containing your key ID.
 
 ```bash
 # Add your secrets
-pass insert dev/openai-api-key
-pass insert dev/anthropic-api-key
+pass insert ai/openai-api-key
+pass insert ai/anthropic-api-key
 pass insert dev/github-token
 pass insert infra/hetzner-api-token
 
@@ -303,7 +303,7 @@ git clone git@github.com:your-username/password-store.git ~/.password-store
 pass ls
 
 # Try decrypting a secret
-pass show dev/openai-api-key
+pass show ai/openai-api-key
 ```
 
 If you see `gpg: decryption failed: No secret key`, the re-encryption on the existing machine didn't include your key. Go back to step 8 and verify your key ID is in `.gpg-id`.
@@ -374,7 +374,7 @@ The service needs API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GITHUB_TOKEN
 This step requires pass to be fully set up first (GPG key generated, password store cloned, decryption verified).
 
 ```bash
-# Generate env file from pass entries (env/api-keys and env/shell)
+# Generate env file from pass entries
 opencode-env generate
 
 # Verify the file was created
@@ -553,8 +553,8 @@ ssh -T git@github.com
 export PASSWORD_STORE_DIR="$HOME/.password-store"
 
 if command -v pass &>/dev/null && [[ -d "$PASSWORD_STORE_DIR" ]]; then
-    export OPENAI_API_KEY=$(pass show dev/openai-api-key 2>/dev/null)
-    export ANTHROPIC_API_KEY=$(pass show dev/anthropic-api-key 2>/dev/null)
+    export OPENAI_API_KEY=$(pass show ai/openai-api-key 2>/dev/null)
+    export ANTHROPIC_API_KEY=$(pass show ai/anthropic-api-key 2>/dev/null)
     export GITHUB_TOKEN=$(pass show dev/github-token 2>/dev/null)
 fi
 ```
@@ -589,7 +589,7 @@ pass init <your-key-id>
 pass ls
 
 # Show a secret
-pass show dev/openai-api-key
+pass show ai/openai-api-key
 
 # Add/edit a secret
 pass insert dev/new-secret

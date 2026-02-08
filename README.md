@@ -90,6 +90,8 @@ On server mode, chezmoi automatically runs these additional setup scripts:
 | `run_once_setup-ufw.sh` | Configures UFW: deny all, allow Tailscale interface |
 | `run_once_setup-opencode-server.sh` | Creates `opencode-web` systemd service + `opencode-env` helper |
 
+Bootstrap (`install.sh`) also attempts Pulse setup in server mode when Pulse source is present at `~/Overlord/projects/services/pulse`.
+
 ### OpenCode Server (Server Mode)
 
 The server runs `opencode web --port 4096 --hostname 0.0.0.0` as a systemd service. All traffic is restricted to the Tailscale mesh by UFW.
@@ -114,7 +116,7 @@ Laptop (opencode attach) ───────┘      WorkingDirectory=~
 The service loads API keys from `~/.config/opencode/server.env` (an `EnvironmentFile`). Use the `opencode-env` helper to generate it from `pass`:
 
 ```bash
-# Generate env file from pass (env/api-keys and env/shell entries)
+# Generate env file from pass entries
 opencode-env generate
 
 # Check current env file status (shows keys, not values)
@@ -141,7 +143,7 @@ Secrets are stored in a **separate private repository** using pass (GPG-encrypte
 
 ```bash
 # Add to pass
-pass insert dev/new-api-key
+pass insert ai/new-api-key
 
 # If needed, update shell config to export it
 chezmoi edit ~/.zshrc
@@ -152,22 +154,13 @@ chezmoi apply
 
 ### How API Keys Reach Applications
 
-The shell config (`~/.zshrc`) loads secrets at startup:
+The shell config (`~/.zshrc`) loads secrets at startup using `passvar`/`passenv`:
 
 ```bash
-# Secrets are loaded via the passenv function
-if [[ -f "$PASSWORD_STORE_DIR/env/api-keys.gpg" ]]; then
-    passenv "env/api-keys"
-fi
-```
-
-Store your API keys in pass at `env/api-keys` as `KEY=VALUE` pairs:
-
-```bash
-pass edit env/api-keys
-# Add lines like:
-# OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-ant-...
+# Secrets are loaded via passvar/passenv
+passvar OPENAI_API_KEY ai/openai-api-key
+passvar ANTHROPIC_API_KEY ai/anthropic-api-key
+passvar GITHUB_TOKEN dev/github-token
 ```
 
 ### pass Repository Structure
@@ -175,11 +168,16 @@ pass edit env/api-keys
 ```
 ~/.password-store/
 ├── .gpg-id              # All machine GPG key IDs
-├── env/
-│   ├── shell.gpg        # Shell environment variables
-│   └── api-keys.gpg     # API keys (OPENAI, ANTHROPIC, etc.)
+├── ai/
+│   ├── openai-api-key.gpg
+│   └── anthropic-api-key.gpg
+├── data/
+│   └── ...
 ├── dev/
 │   └── github-token.gpg
+├── overlord/
+│   └── env/
+│       └── <project-name>.gpg
 └── infra/
     └── hetzner-api-token.gpg
 ```
@@ -187,6 +185,8 @@ pass edit env/api-keys
 ## Adding a New Machine
 
 See [ONBOARDING.md](ONBOARDING.md) for the complete guide.
+
+For full VPS disaster recovery, see [vps-rebuild.md](vps-rebuild.md).
 
 **Quick summary:**
 
@@ -356,6 +356,7 @@ dotfiles/
 ├── tools.yaml                  # Tool definitions
 ├── install.sh                  # Bootstrap script
 ├── ONBOARDING.md               # New machine guide
+├── vps-rebuild.md              # VPS disaster recovery runbook
 └── README.md                   # This file
 ```
 

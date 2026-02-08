@@ -2,6 +2,7 @@
 {{- $gitName := promptStringOnce . "git.name" "Git user name" -}}
 {{- $gitEmail := promptStringOnce . "git.email" "Git email" -}}
 {{- $overlordBaseDir := promptStringOnce . "overlord.base_dir" "Overlord base directory" "~/Overlord" -}}
+{{- $overlordRole := promptStringOnce . "overlord.role" "Overlord role (main/vps/runner/aux)" "main" -}}
 
 [data]
 mode = {{ $mode | quote }}
@@ -12,3 +13,4 @@ email = {{ $gitEmail | quote }}
 
 [data.overlord]
 base_dir = {{ $overlordBaseDir | quote }}
+role = {{ $overlordRole | quote }}

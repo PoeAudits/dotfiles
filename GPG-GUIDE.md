@@ -108,13 +108,13 @@ pass init <your-gpg-key-id>
 ### Step 8: Add Secrets
 
 ```bash
-pass insert anthropic-api-key
-pass insert openai-api-key
+pass insert ai/anthropic-api-key
+pass insert ai/openai-api-key
 # etc.
 
 # Verify
 pass ls
-pass show anthropic-api-key
+pass show ai/anthropic-api-key
 ```
 
 ### Step 9: Push to Git
@@ -321,8 +321,8 @@ pass init $(cat .gpg-id)
 **Expected output:**
 ```
 Password store initialized for KEY1, KEY2
-reencrypting anthropic-api-key
-reencrypting openai-api-key
+reencrypting ai/anthropic-api-key
+reencrypting ai/openai-api-key
 ...
 ```
 
@@ -352,7 +352,7 @@ git clone git@github.com:YOUR-USERNAME/password-store.git ~/.password-store
 
 ```bash
 pass ls
-pass show anthropic-api-key
+pass show ai/anthropic-api-key
 ```
 
 **New machine setup complete.**
@@ -427,7 +427,7 @@ Then import on other machines and run `pass init` again.
 **Diagnose:**
 ```bash
 # Check what keys the secret is encrypted to
-gpg --list-packets ~/.password-store/anthropic-api-key.gpg 2>&1 | grep keyid
+gpg --list-packets ~/.password-store/ai/anthropic-api-key.gpg 2>&1 | grep keyid
 
 # Check what keys are in .gpg-id
 cat ~/.password-store/.gpg-id

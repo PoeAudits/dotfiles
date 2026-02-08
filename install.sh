@@ -159,6 +159,150 @@ install_chezmoi() {
     log_info "chezmoi installed successfully: $(chezmoi --version)"
 }
 
+install_syncthing() {
+    local os="$1"
+
+    log_info "Checking for syncthing..."
+    if command -v syncthing &>/dev/null; then
+        log_info "syncthing already installed"
+        return 0
+    fi
+
+    log_info "Installing syncthing..."
+    case "$os" in
+        arch|manjaro)
+            if command -v pacman &>/dev/null; then
+                sudo pacman -S --noconfirm syncthing || {
+                    log_error "Failed to install syncthing via pacman"
+                    return 1
+                }
+            else
+                log_error "pacman not found"
+                return 1
+            fi
+            ;;
+        ubuntu|debian)
+            if command -v apt-get &>/dev/null; then
+                sudo apt-get update -y || true
+                sudo apt-get install -y syncthing || {
+                    log_error "Failed to install syncthing via apt"
+                    return 1
+                }
+            else
+                log_error "apt-get not found"
+                return 1
+            fi
+            ;;
+        *)
+            log_error "Unsupported OS for syncthing installation: $os"
+            return 1
+            ;;
+    esac
+}
+
+configure_syncthing_service() {
+    local mode="$1"
+
+    log_info "Enabling syncthing user service..."
+    systemctl --user enable syncthing.service || {
+        log_error "Failed to enable syncthing user service"
+        return 1
+    }
+    systemctl --user start syncthing.service || {
+        log_error "Failed to start syncthing user service"
+        return 1
+    }
+
+    if [[ "$mode" == "server" ]]; then
+        log_info "Applying syncthing resource limits (server mode)"
+        mkdir -p "$HOME/.config/systemd/user/syncthing.service.d"
+        cat > "$HOME/.config/systemd/user/syncthing.service.d/override.conf" <<'EOF'
+[Service]
+Environment="GOMAXPROCS=2"
+Environment="GOMEMLIMIT=512MiB"
+EOF
+        systemctl --user daemon-reload
+        systemctl --user restart syncthing.service || {
+            log_error "Failed to restart syncthing after applying limits"
+            return 1
+        }
+    fi
+}
+
+install_pulse() {
+    local mode="$1"
+    local pulse_repo="$HOME/Overlord/projects/services/pulse"
+    local pulse_bin="$HOME/.local/bin/pulse"
+    local pulse_config_dir="$HOME/.config/pulse"
+    local pulse_config="$pulse_config_dir/config.yaml"
+    local pulse_service_dir="$HOME/.config/systemd/user"
+    local pulse_service="$pulse_service_dir/pulse.service"
+
+    if [[ "$mode" != "server" ]]; then
+        return 0
+    fi
+
+    log_info "Configuring pulse scheduler (server mode)..."
+
+    if ! command -v go &>/dev/null; then
+        log_info "Skipping pulse setup: Go is not installed"
+        return 0
+    fi
+
+    if [[ ! -f "$pulse_repo/Makefile" ]]; then
+        log_info "Skipping pulse setup: source repo not found at $pulse_repo"
+        log_info "After cloning pulse, run: make -C $pulse_repo build"
+        return 0
+    fi
+
+    mkdir -p "$HOME/.local/bin"
+    if make -C "$pulse_repo" build; then
+        if [[ -f "$pulse_repo/bin/pulse" ]]; then
+            install -m 0755 "$pulse_repo/bin/pulse" "$pulse_bin"
+            log_info "Installed pulse binary to $pulse_bin"
+        else
+            log_error "Pulse build succeeded but binary was not found"
+            return 0
+        fi
+    else
+        log_error "Pulse build failed; skipping pulse service setup"
+        return 0
+    fi
+
+    mkdir -p "$pulse_config_dir"
+    if [[ ! -f "$pulse_config" && -f "$pulse_repo/config.yaml" ]]; then
+        cp "$pulse_repo/config.yaml" "$pulse_config"
+        chmod 600 "$pulse_config"
+        log_info "Copied default pulse config to $pulse_config"
+    fi
+
+    mkdir -p "$pulse_service_dir"
+    cat > "$pulse_service" <<EOF
+[Unit]
+Description=Pulse Scheduler Service
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+EnvironmentFile=-$HOME/.config/opencode/server.env
+ExecStart=$pulse_bin --config $pulse_config --state $pulse_config_dir/state.json
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+
+    systemctl --user daemon-reload
+    if systemctl --user enable --now pulse.service; then
+        log_info "Pulse user service enabled and started"
+    else
+        log_error "Pulse service was installed but failed to start"
+        log_info "Check logs: journalctl --user -u pulse -f"
+    fi
+}
+
 run_chezmoi_init() {
     local repo_url="$1"
     local mode="$2"
@@ -201,6 +345,7 @@ Next steps:
   2. Restart your shell or run: exec \$SHELL
   3. Check chezmoi status: chezmoi status
   4. Update dotfiles: chezmoi update
+  5. Verify Overlord sync health: overlord doctor
 
 Useful commands:
   chezmoi diff       - Show changes between local and repo
@@ -213,6 +358,26 @@ For more information, visit: https://chezmoi.io
 ================================================================================
 
 EOF
+}
+
+bootstrap_overlord() {
+    log_info "Bootstrapping Overlord sync config..."
+
+    if ! command -v overlord &>/dev/null; then
+        log_error "overlord command not found"
+        log_info "Install Overlord first, then run: overlord setup --init"
+        return 1
+    fi
+
+    log_info "Running: overlord setup --init"
+    log_info "This prompts for machine name, role, and optional peer device ID"
+    if ! overlord setup --init; then
+        log_error "Overlord bootstrap failed"
+        log_info "Fix the issue and rerun: overlord setup --init"
+        return 1
+    fi
+
+    log_info "Overlord bootstrap complete"
 }
 
 # ============================================================================
@@ -257,6 +422,16 @@ main() {
     
     # Run chezmoi init
     run_chezmoi_init "$REPO_URL" "$MODE" || exit 1
+
+    # Install and configure syncthing
+    install_syncthing "$os" || exit 1
+    configure_syncthing_service "$MODE" || exit 1
+
+    # Install pulse scheduler if source exists (server mode)
+    install_pulse "$MODE"
+
+    # Bootstrap Overlord machine config + Syncthing config folder
+    bootstrap_overlord || exit 1
     
     # Show post-install instructions
     show_post_install

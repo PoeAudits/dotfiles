@@ -279,3 +279,107 @@ backup() {
     fi
     cp "$1" "${1}.backup.$(date +%Y%m%d_%H%M%S)"
 }
+
+# ------------------------------------------------------------------------------
+# OpenCode utilities
+# ------------------------------------------------------------------------------
+
+# Configuration
+_OC_TMUX_SESSION="oc-server"
+_OC_LOCAL_HOST="127.0.0.1"
+_OC_LOCAL_PORT="4096"
+_OC_REMOTE_HOST="100.126.40.38"
+_OC_REMOTE_PORT="4096"
+
+# Check if OpenCode server is running
+oc-status() {
+    if tmux has-session -t "$_OC_TMUX_SESSION" 2>/dev/null; then
+        echo "OpenCode server is running (tmux session: $_OC_TMUX_SESSION)"
+        # Try to check health endpoint
+        if command -v curl &>/dev/null; then
+            local health
+            health=$(curl -s --connect-timeout 2 "http://${_OC_LOCAL_HOST}:${_OC_LOCAL_PORT}/global/health" 2>/dev/null)
+            if [[ -n "$health" ]]; then
+                echo "Health: $health"
+            fi
+        fi
+        return 0
+    else
+        echo "OpenCode server is not running"
+        return 1
+    fi
+}
+
+# Stop the OpenCode server
+oc-stop() {
+    if tmux has-session -t "$_OC_TMUX_SESSION" 2>/dev/null; then
+        echo "Stopping OpenCode server..."
+        tmux kill-session -t "$_OC_TMUX_SESSION"
+        echo "Server stopped."
+    else
+        echo "OpenCode server is not running."
+    fi
+}
+
+# Start the OpenCode server in a tmux session
+_oc_start_server() {
+    echo "Starting OpenCode server in tmux session '$_OC_TMUX_SESSION'..."
+    tmux new-session -d -s "$_OC_TMUX_SESSION" \
+        "opencode serve --hostname $_OC_LOCAL_HOST --port $_OC_LOCAL_PORT"
+    
+    # Wait for server to be ready (up to 10 seconds)
+    local attempts=0
+    local max_attempts=20
+    echo -n "Waiting for server to be ready"
+    while [[ $attempts -lt $max_attempts ]]; do
+        if curl -s --connect-timeout 1 "http://${_OC_LOCAL_HOST}:${_OC_LOCAL_PORT}/global/health" &>/dev/null; then
+            echo " ready!"
+            return 0
+        fi
+        echo -n "."
+        sleep 0.5
+        ((attempts++))
+    done
+    echo " timeout (server may still be starting)"
+    return 0
+}
+
+# Smart OpenCode command: start server if needed, then attach
+oc() {
+    # Check if opencode is installed
+    if ! command -v opencode &>/dev/null; then
+        echo "Error: opencode is not installed" >&2
+        return 1
+    fi
+
+    # Check if server is running
+    if ! tmux has-session -t "$_OC_TMUX_SESSION" 2>/dev/null; then
+        _oc_start_server
+    fi
+
+    # Attach to the server with current directory
+    opencode attach "http://${_OC_LOCAL_HOST}:${_OC_LOCAL_PORT}" --dir "$(pwd)"
+}
+
+# Attach to remote VPS OpenCode server
+oc-remote() {
+    # Check if opencode is installed
+    if ! command -v opencode &>/dev/null; then
+        echo "Error: opencode is not installed" >&2
+        return 1
+    fi
+
+    # Convert current path to ~-relative path for remote
+    # e.g., /home/thomas/Overlord/foo -> ~/Overlord/foo
+    local current_dir="$(pwd)"
+    local relative_dir="${current_dir#$HOME}"
+    
+    if [[ "$relative_dir" != "$current_dir" ]]; then
+        # Path was under home directory, use ~-relative
+        opencode attach "http://${_OC_REMOTE_HOST}:${_OC_REMOTE_PORT}" --dir "~${relative_dir}"
+    else
+        # Path not under home, just connect without --dir
+        echo "Note: Current directory is not under home, connecting without --dir"
+        opencode attach "http://${_OC_REMOTE_HOST}:${_OC_REMOTE_PORT}"
+    fi
+}

@@ -65,6 +65,8 @@ alias v='${EDITOR:-nvim}'
 alias vi='${EDITOR:-nvim}'
 alias vim='${EDITOR:-nvim}'
 
+# OpenCode - see functions.sh for oc, oc-remote, oc-stop, oc-status
+
 # Misc
 alias path='echo -e ${PATH//:/\\n}'
 alias myip='curl -s ifconfig.me'

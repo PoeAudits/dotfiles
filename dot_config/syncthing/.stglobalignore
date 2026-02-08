@@ -1,0 +1,14 @@
+node_modules
+.venv
+__pycache__
+*.pyc
+.git
+dist
+build
+.cache
+.next
+.turbo
+target
+*.swp
+*~
+.DS_Store
