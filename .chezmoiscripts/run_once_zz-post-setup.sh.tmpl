@@ -134,6 +134,19 @@ OpenCode Server
 
 EOF
 fi
+
+cat >&2 <<EOF
+--------------------------------------------------------------------------------
+UFW (Tailscale-only)
+--------------------------------------------------------------------------------
+
+  To lock down inbound traffic to Tailscale only:
+    ufw-tailscale-lockdown
+
+  Check:
+    sudo ufw status verbose
+
+EOF
 {{ end -}}
 
 echo "================================================================================" >&2

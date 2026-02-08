@@ -29,6 +29,7 @@ main() {
     if ! command -v tailscale &>/dev/null; then
         log_warn "Tailscale not installed yet; skipping UFW lock-down"
         log_info "After installing/authenticating Tailscale, re-run: chezmoi apply"
+        log_info "Or run later: ufw-tailscale-lockdown"
         exit 0
     fi
 
@@ -36,6 +37,7 @@ main() {
     if [[ "$backend_state" != "Running" ]]; then
         log_warn "Tailscale not connected yet (BackendState=$backend_state); skipping UFW lock-down"
         log_info "Authenticate first: tailscale up --ssh"
+        log_info "Then run: ufw-tailscale-lockdown"
         exit 0
     fi
 
