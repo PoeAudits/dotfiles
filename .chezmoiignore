@@ -13,6 +13,7 @@ ONBOARDING.md
 AGENTS.md
 CONTRIBUTING.md
 GPG-GUIDE.md
+docs/
 Makefile
 installation.md
 install.sh
