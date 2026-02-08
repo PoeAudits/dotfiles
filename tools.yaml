@@ -145,10 +145,16 @@ tools:
 
   # fd - Fast find alternative
   fd:
-    check: "fd --version"
+    # On Ubuntu, the binary is often named `fdfind` (package: fd-find)
+    check: "fd --version 2>/dev/null || fdfind --version"
     install:
       arch: "sudo pacman -S --noconfirm fd"
-      ubuntu: "sudo apt install -y fd-find"
+      ubuntu: |
+        sudo apt install -y fd-find
+        mkdir -p "$HOME/.local/bin"
+        if command -v fdfind &>/dev/null; then
+          ln -sf "$(command -v fdfind)" "$HOME/.local/bin/fd"
+        fi
 
   # fzf - Fuzzy finder
   fzf:
@@ -159,10 +165,16 @@ tools:
 
   # bat - Cat with syntax highlighting
   bat:
-    check: "bat --version"
+    # On Ubuntu, the binary is often named `batcat` (package: bat)
+    check: "bat --version 2>/dev/null || batcat --version"
     install:
       arch: "sudo pacman -S --noconfirm bat"
-      ubuntu: "sudo apt install -y bat"
+      ubuntu: |
+        sudo apt install -y bat
+        mkdir -p "$HOME/.local/bin"
+        if command -v batcat &>/dev/null; then
+          ln -sf "$(command -v batcat)" "$HOME/.local/bin/bat"
+        fi
 
   # eza - Modern ls replacement
   eza:

@@ -1,152 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 # Chezmoi run_once script: Post-setup summary with next steps
 # Named zz- to run last alphabetically after all other setup scripts
 
 set -Eeuo pipefail
 
-HOSTNAME="{{ .chezmoi.hostname }}"
-GIT_EMAIL="{{ .git.email }}"
-PASSWORD_STORE_DIR="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
-
-# ============================================================================
-# Gather state
-# ============================================================================
-
-# Find GPG fingerprint for this hostname
-gpg_fpr=$(gpg --list-keys --with-colons 2>/dev/null | \
-    awk -F: -v hostname="$HOSTNAME" '
-        /^fpr:/ { current_fpr = $10 }
-        /^uid:/ && tolower($10) ~ tolower(hostname) { print current_fpr; exit }
-    ')
-
-ssh_pub=""
-[[ -f "$HOME/.ssh/id_ed25519.pub" ]] && ssh_pub=$(cat "$HOME/.ssh/id_ed25519.pub")
-
-has_pass_store=false
-[[ -d "$PASSWORD_STORE_DIR" ]] && has_pass_store=true
-
-tailscale_ip=""
-if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
-    tailscale_ip=$(tailscale ip -4 2>/dev/null || true)
+if [[ "${OPENCODE_INSTALL_SH:-}" == "1" ]]; then
+  echo "[post-setup] Note: final key + next-steps summary prints at end of install.sh" >&2
+  exit 0
 fi
 
-# ============================================================================
-# Print summary
-# ============================================================================
-
-cat >&2 <<EOF
-
-================================================================================
-Setup Complete for $HOSTNAME
-================================================================================
-
-GPG Fingerprint: ${gpg_fpr:-NOT FOUND}
-SSH Public Key:  ${ssh_pub:-NOT FOUND}
-Tailscale IP:    ${tailscale_ip:-NOT CONNECTED}
-Password Store:  $(if [[ "$has_pass_store" == "true" ]]; then echo "OK"; else echo "NOT SET UP"; fi)
-
-EOF
-
-if [[ "$has_pass_store" == "false" ]]; then
-    cat >&2 <<EOF
---------------------------------------------------------------------------------
-STEP 1: Add SSH key to GitHub
---------------------------------------------------------------------------------
-
-  Go to: https://github.com/settings/keys
-  Click "New SSH key", title: $HOSTNAME
-  Paste: $ssh_pub
-
-  Or: gh ssh-key add ~/.ssh/id_ed25519.pub --title "$HOSTNAME"
-
-  Test: ssh -T git@github.com
-
---------------------------------------------------------------------------------
-STEP 2: Authorize this machine's GPG key (on an EXISTING machine with pass)
---------------------------------------------------------------------------------
-
-  # Import this machine's GPG public key
-  ssh root@${tailscale_ip:-$HOSTNAME} "cat ~/.gnupg/public-keys/${HOSTNAME}.asc" | gpg --import
-
-  # Trust the key
-  gpg --edit-key $gpg_fpr
-  # Type: trust, 5, y, quit
-
-  # Re-encrypt the store with the new key
-  cd ~/.password-store
-  echo "$gpg_fpr" >> .gpg-id
-  pass init \$(cat .gpg-id)
-  pass git push
-
---------------------------------------------------------------------------------
-STEP 3: Clone password store (back on THIS machine)
---------------------------------------------------------------------------------
-
-  git clone git@github.com:PoeAudits/.password-store.git ~/.password-store
-  pass ls
-
-EOF
-fi
-
-{{ if eq .mode "server" -}}
-if [[ "$has_pass_store" == "false" ]]; then
-    cat >&2 <<EOF
---------------------------------------------------------------------------------
-STEP 4: Generate env file and start OpenCode server
---------------------------------------------------------------------------------
-
-  opencode-env generate
-  systemctl start opencode-web
-  systemctl status opencode-web
-
-  Access from any Tailscale device:
-    TUI: opencode attach http://${tailscale_ip:-<tailscale-ip>}:4096
-    Web: http://${tailscale_ip:-<tailscale-ip>}:4096
-
-EOF
-elif [[ ! -f "$HOME/.config/opencode/server.env" ]]; then
-    cat >&2 <<EOF
---------------------------------------------------------------------------------
-NEXT: Generate env file and start OpenCode server
---------------------------------------------------------------------------------
-
-  Password store is set up. Now run:
-
-  opencode-env generate
-  systemctl start opencode-web
-  systemctl status opencode-web
-
-  Access from any Tailscale device:
-    TUI: opencode attach http://${tailscale_ip:-<tailscale-ip>}:4096
-    Web: http://${tailscale_ip:-<tailscale-ip>}:4096
-
-EOF
+if [[ -x "$HOME/.local/bin/machine-setup-summary" ]]; then
+  "$HOME/.local/bin/machine-setup-summary"
 else
-    cat >&2 <<EOF
---------------------------------------------------------------------------------
-OpenCode Server
---------------------------------------------------------------------------------
-
-  Status:  $(systemctl is-active opencode-web 2>/dev/null || echo "unknown")
-  Access:
-    TUI: opencode attach http://${tailscale_ip:-<tailscale-ip>}:4096
-    Web: http://${tailscale_ip:-<tailscale-ip>}:4096
-
-EOF
+  echo "[post-setup] WARNING: missing: $HOME/.local/bin/machine-setup-summary" >&2
 fi
-
-cat >&2 <<EOF
---------------------------------------------------------------------------------
-UFW (Tailscale-only)
---------------------------------------------------------------------------------
-
-  To lock down inbound traffic to Tailscale only:
-    ufw-tailscale-lockdown
-
-  Check:
-    sudo ufw status verbose
-
-EOF
-{{ end -}}
-
-echo "================================================================================" >&2

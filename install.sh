@@ -331,7 +331,7 @@ run_chezmoi_init() {
     
     # Run chezmoi init
     log_debug "Running: ${cmd[*]}"
-    "${cmd[@]}" || {
+    OPENCODE_INSTALL_SH=1 "${cmd[@]}" || {
         log_error "chezmoi init failed"
         return 1
     }
@@ -380,11 +380,18 @@ bootstrap_overlord() {
         return 0
     fi
 
-    log_info "Running: overlord setup --init"
+    local -a cmd=(overlord setup)
+    local help_out
+    help_out=$(overlord setup --help 2>&1 || true)
+    if printf '%s' "$help_out" | grep -q -- "--init"; then
+        cmd=(overlord setup --init)
+    fi
+
+    log_info "Running: ${cmd[*]}"
     log_info "This prompts for machine name, role, and optional peer device ID"
-    if ! overlord setup --init; then
+    if ! "${cmd[@]}"; then
         log_error "Overlord bootstrap failed"
-        log_info "Fix the issue and rerun: overlord setup --init"
+        log_info "Fix the issue and rerun: ${cmd[*]}"
         return 1
     fi
 
@@ -446,8 +453,18 @@ main() {
     
     # Show post-install instructions
     show_post_install
-    
+
     log_info "Bootstrap complete!"
+
+    # Re-print the machine key + next-steps summary at the very end.
+    # (The same info is printed during `chezmoi init --apply`, but later installs
+    # can scroll it out of view.)
+    if [[ -x "$HOME/.local/bin/machine-setup-summary" ]]; then
+        "$HOME/.local/bin/machine-setup-summary"
+    else
+        log_warn "Missing: $HOME/.local/bin/machine-setup-summary"
+        log_warn "Re-run: chezmoi apply (or check ~/.ssh and gpg keys manually)"
+    fi
 }
 
 # Run main function with all arguments
